@@ -29,6 +29,7 @@ public static class MauiProgram
         });
 
         builder.Services.AddScoped<RecorridoService>();
+        builder.Services.AddScoped<SignalRService>();
 
         return builder.Build();
     }
