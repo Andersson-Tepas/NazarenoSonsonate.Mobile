@@ -1,7 +1,9 @@
 ﻿@page "/mapa-recorrido/{Id:int}"
+@using Microsoft.JSInterop
 @using NazarenoSonsonate.Shared.DTOs
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <h3>Detalle del recorrido</h3>
 
@@ -25,9 +27,10 @@ else
         <p><strong>Hora de salida:</strong> @recorrido.HoraSalida</p>
     </div>
 
-    <div class="card p-3">
-        <h5>Puntos de referencia</h5>
+    <div id="mapa-recorrido" style="height: 450px; width: 100%; border-radius: 12px;"></div>
 
+    <div class="card p-3 mt-3">
+        <h5>Puntos de referencia</h5>
         <ol>
             @foreach (var punto in recorrido.PuntosRuta.OrderBy(x => x.Orden))
             {
@@ -46,6 +49,7 @@ else
     private RecorridoDto? recorrido;
     private bool cargando = true;
     private string? error;
+    private bool mapaDibujado;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -53,6 +57,8 @@ else
         {
             cargando = true;
             error = null;
+            mapaDibujado = false;
+
             recorrido = await RecorridoService.ObtenerRecorridoPorIdAsync(Id);
         }
         catch (Exception ex)
@@ -62,6 +68,29 @@ else
         finally
         {
             cargando = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!cargando && !mapaDibujado && recorrido is not null && recorrido.PuntosRuta.Any())
+        {
+            var puntosOrdenados = recorrido.PuntosRuta.OrderBy(x => x.Orden).ToList();
+            var primerPunto = puntosOrdenados.First();
+
+            await JS.InvokeVoidAsync("mapaRecorrido.init", "mapa-recorrido", primerPunto.Latitud, primerPunto.Longitud, 16);
+
+            var puntos = puntosOrdenados.Select(x => new
+            {
+                orden = x.Orden,
+                referencia = x.Referencia,
+                latitud = x.Latitud,
+                longitud = x.Longitud
+            });
+
+            await JS.InvokeVoidAsync("mapaRecorrido.drawRoute", puntos);
+
+            mapaDibujado = true;
         }
     }
 
