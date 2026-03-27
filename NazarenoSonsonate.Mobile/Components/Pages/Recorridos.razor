@@ -1,5 +1,59 @@
-﻿<h3>Recorridos</h3>
+﻿@page "/recorridos"
+@using NazarenoSonsonate.Shared.DTOs
+@inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
+@inject NavigationManager Navigation
+
+<h3>Recorridos procesionales</h3>
+
+@if (cargando)
+{
+    <p>Cargando recorridos...</p>
+}
+else if (!string.IsNullOrWhiteSpace(error))
+{
+    <p style="color:red;">@error</p>
+}
+else if (recorridos.Count == 0)
+{
+    <p>No hay recorridos disponibles.</p>
+}
+else
+{
+    <div class="d-flex flex-column gap-3">
+        @foreach (var recorrido in recorridos)
+        {
+            <div class="card p-3 shadow-sm" style="cursor:pointer;" @onclick="() => AbrirRecorrido(recorrido.Id)">
+                <h5>@recorrido.Nombre</h5>
+                <p>@recorrido.Descripcion</p>
+                <small>Hora de salida: @recorrido.HoraSalida</small>
+            </div>
+        }
+    </div>
+}
 
 @code {
+    private List<RecorridoDto> recorridos = new();
+    private bool cargando = true;
+    private string? error;
 
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            recorridos = await RecorridoService.ObtenerRecorridosAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void AbrirRecorrido(int id)
+    {
+        Navigation.NavigateTo($"/mapa-recorrido/{id}");
+    }
 }

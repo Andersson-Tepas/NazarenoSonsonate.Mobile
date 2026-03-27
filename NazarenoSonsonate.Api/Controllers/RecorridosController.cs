@@ -16,7 +16,7 @@ namespace NazarenoSonsonate.Api.Controllers
             Nombre = "Lunes Santo",
             Descripcion = "Recorrido procesional de Lunes Santo",
             Tipo = TipoRecorrido.LunesSanto,
-            HoraSalida = "06:00 PM",
+            HoraSalida = "03:00 PM",
             PuntosRuta = new List<PuntoRutaDto>
             {
                 new() { Id = 1, RecorridoId = 1, Latitud = 13.7185, Longitud = -89.7240, Orden = 1, Referencia = "Punto inicial" },
@@ -30,7 +30,7 @@ namespace NazarenoSonsonate.Api.Controllers
             Nombre = "Martes Santo",
             Descripcion = "Recorrido procesional de Martes Santo",
             Tipo = TipoRecorrido.MartesSanto,
-            HoraSalida = "06:00 PM",
+            HoraSalida = "03:00 PM",
             PuntosRuta = new List<PuntoRutaDto>
             {
                 new() { Id = 4, RecorridoId = 2, Latitud = 13.7185, Longitud = -89.7240, Orden = 1, Referencia = "Punto inicial" },
@@ -44,7 +44,7 @@ namespace NazarenoSonsonate.Api.Controllers
             Nombre = "Miércoles Santo",
             Descripcion = "Recorrido procesional de Miércoles Santo",
             Tipo = TipoRecorrido.MiercolesSanto,
-            HoraSalida = "06:00 PM",
+            HoraSalida = "02:00 PM",
             PuntosRuta = new List<PuntoRutaDto>
             {
                 new() { Id = 7, RecorridoId = 3, Latitud = 13.7185, Longitud = -89.7240, Orden = 1, Referencia = "Punto inicial" },
@@ -58,7 +58,7 @@ namespace NazarenoSonsonate.Api.Controllers
             Nombre = "Viernes Santo",
             Descripcion = "Recorrido procesional de Viernes Santo",
             Tipo = TipoRecorrido.ViernesSanto,
-            HoraSalida = "03:00 PM",
+            HoraSalida = "06:00 AM",
             PuntosRuta = new List<PuntoRutaDto>
             {
                 new() { Id = 10, RecorridoId = 4, Latitud = 13.7185, Longitud = -89.7240, Orden = 1, Referencia = "Punto inicial" },

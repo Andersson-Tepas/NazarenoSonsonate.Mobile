@@ -1,5 +1,12 @@
 ﻿@page "/"
+@inject NavigationManager Navigation
 
-<h1>Hello, world!</h1>
+<h3>Hermandad de Jesús de Nazareno</h3>
+<p>Cargando aplicación...</p>
 
-Welcome to your new app.
+@code {
+    protected override void OnInitialized()
+    {
+        Navigation.NavigateTo("/recorridos");
+    }
+}

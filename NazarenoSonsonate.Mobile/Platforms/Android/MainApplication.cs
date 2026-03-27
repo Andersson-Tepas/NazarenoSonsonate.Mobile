@@ -1,16 +1,19 @@
 ﻿using Android.App;
 using Android.Runtime;
 
-namespace NazarenoSonsonate.Mobile
-{
-    [Application]
-    public class MainApplication : MauiApplication
-    {
-        public MainApplication(IntPtr handle, JniHandleOwnership ownership)
-            : base(handle, ownership)
-        {
-        }
+namespace NazarenoSonsonate.Mobile;
 
-        protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
+#if DEBUG
+[Application(UsesCleartextTraffic = true)]
+#else
+[Application]
+#endif
+public class MainApplication : MauiApplication
+{
+    public MainApplication(IntPtr handle, JniHandleOwnership ownership)
+        : base(handle, ownership)
+    {
     }
+
+    protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
 }

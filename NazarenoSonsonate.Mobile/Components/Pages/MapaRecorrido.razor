@@ -1,5 +1,77 @@
-﻿<h3>MapaRecorrido</h3>
+﻿@page "/mapa-recorrido/{Id:int}"
+@using NazarenoSonsonate.Shared.DTOs
+@inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
+@inject NavigationManager Navigation
+
+<h3>Detalle del recorrido</h3>
+
+@if (cargando)
+{
+    <p>Cargando recorrido...</p>
+}
+else if (!string.IsNullOrWhiteSpace(error))
+{
+    <p style="color:red;">@error</p>
+}
+else if (recorrido is null)
+{
+    <p>No se encontró el recorrido.</p>
+}
+else
+{
+    <div class="card p-3">
+        <h4>@recorrido.Nombre</h4>
+        <p>@recorrido.Descripcion</p>
+        <p><strong>Hora de salida:</strong> @recorrido.HoraSalida</p>
+
+        <h5>Puntos de ruta</h5>
+        <ul>
+            @foreach (var punto in recorrido.PuntosRuta.OrderBy(x => x.Orden))
+            {
+                <li>
+                    Orden @punto.Orden -
+                    Lat: @punto.Latitud,
+                    Lng: @punto.Longitud
+                    @if (!string.IsNullOrWhiteSpace(punto.Referencia))
+                    {
+                        <span>- @punto.Referencia</span>
+                    }
+                </li>
+            }
+        </ul>
+
+        <button class="btn btn-secondary mt-3" @onclick="Volver">Volver</button>
+    </div>
+}
 
 @code {
+    [Parameter]
+    public int Id { get; set; }
 
+    private RecorridoDto? recorrido;
+    private bool cargando = true;
+    private string? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            cargando = true;
+            error = null;
+            recorrido = await RecorridoService.ObtenerRecorridoPorIdAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void Volver()
+    {
+        Navigation.NavigateTo("/recorridos");
+    }
 }
