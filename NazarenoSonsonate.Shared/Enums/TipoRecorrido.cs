@@ -6,7 +6,11 @@ using System.Threading.Tasks;
 
 namespace NazarenoSonsonate.Shared.Enums
 {
-    internal class TipoRecorrido
+    public enum TipoRecorrido
     {
+        LunesSanto = 1,
+        MartesSanto = 2,
+        MiercolesSanto = 3,
+        ViernesSanto = 4
     }
 }

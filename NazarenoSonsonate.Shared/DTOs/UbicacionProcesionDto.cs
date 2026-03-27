@@ -6,7 +6,13 @@ using System.Threading.Tasks;
 
 namespace NazarenoSonsonate.Shared.DTOs
 {
-    internal class UbicacionProcesionDto
+    public class UbicacionProcesionDto
     {
+        public int RecorridoId { get; set; }
+        public double Latitud { get; set; }
+        public double Longitud { get; set; }
+        public DateTime FechaHora { get; set; }
+        public string? GrupoActual { get; set; }
+        public string? Mensaje { get; set; }
     }
 }
