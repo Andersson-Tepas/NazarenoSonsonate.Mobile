@@ -14,6 +14,7 @@ namespace NazarenoSonsonate.Shared.DTOs
         public string Descripcion { get; set; } = string.Empty;
         public TipoRecorrido Tipo { get; set; }
         public string HoraSalida { get; set; } = string.Empty;
+        public bool Activo { get; set; }
         public List<PuntoRutaDto> PuntosRuta { get; set; } = new();
     }
 }

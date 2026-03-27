@@ -1,14 +1,13 @@
 ﻿@page "/mapa-recorrido/{Id:int}"
 @using NazarenoSonsonate.Shared.DTOs
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
-@inject HttpClient Http
 @inject NavigationManager Navigation
 
-<h3>Mapa del recorrido</h3>
+<h3>Detalle del recorrido</h3>
 
 @if (cargando)
 {
-    <p>Cargando información del recorrido...</p>
+    <p>Cargando recorrido...</p>
 }
 else if (!string.IsNullOrWhiteSpace(error))
 {
@@ -26,32 +25,15 @@ else
         <p><strong>Hora de salida:</strong> @recorrido.HoraSalida</p>
     </div>
 
-    @if (ubicacionActual is not null)
-    {
-        <div class="card p-3 mb-3">
-            <h5>Ubicación actual</h5>
-            <p><strong>Latitud:</strong> @ubicacionActual.Latitud</p>
-            <p><strong>Longitud:</strong> @ubicacionActual.Longitud</p>
-            <p><strong>Grupo actual:</strong> @ubicacionActual.GrupoActual</p>
-            <p><strong>Mensaje:</strong> @ubicacionActual.Mensaje</p>
-            <p><strong>Actualizado:</strong> @ubicacionActual.FechaHora.ToString("dd/MM/yyyy hh:mm tt")</p>
-        </div>
-    }
-
     <div class="card p-3">
-        <h5>Puntos de ruta</h5>
-        <ul>
+        <h5>Puntos de referencia</h5>
+
+        <ol>
             @foreach (var punto in recorrido.PuntosRuta.OrderBy(x => x.Orden))
             {
-                <li>
-                    Punto @punto.Orden - Lat: @punto.Latitud, Lng: @punto.Longitud
-                    @if (!string.IsNullOrWhiteSpace(punto.Referencia))
-                    {
-                        <span>- @punto.Referencia</span>
-                    }
-                </li>
+                <li>@punto.Referencia</li>
             }
-        </ul>
+        </ol>
     </div>
 
     <button class="btn btn-secondary mt-3" @onclick="Volver">Volver</button>
@@ -62,7 +44,6 @@ else
     public int Id { get; set; }
 
     private RecorridoDto? recorrido;
-    private UbicacionProcesionDto? ubicacionActual;
     private bool cargando = true;
     private string? error;
 
@@ -72,9 +53,7 @@ else
         {
             cargando = true;
             error = null;
-
             recorrido = await RecorridoService.ObtenerRecorridoPorIdAsync(Id);
-            ubicacionActual = await Http.GetFromJsonAsync<UbicacionProcesionDto>($"api/ubicacion/{Id}");
         }
         catch (Exception ex)
         {
