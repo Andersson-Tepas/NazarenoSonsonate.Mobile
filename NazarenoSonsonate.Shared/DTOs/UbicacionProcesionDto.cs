@@ -12,7 +12,7 @@ namespace NazarenoSonsonate.Shared.DTOs
         public double Latitud { get; set; }
         public double Longitud { get; set; }
         public DateTime FechaHora { get; set; }
-        public string? GrupoActual { get; set; }
-        public string? Mensaje { get; set; }
+        public string? GrupoActual { get; set; } = string.Empty;
+        public string? Mensaje { get; set; } = string.Empty;
     }
 }

@@ -1,4 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using NazarenoSonsonate.Api.Hubs;
 using NazarenoSonsonate.Shared.DTOs;
 
 namespace NazarenoSonsonate.Api.Controllers
@@ -7,6 +9,13 @@ namespace NazarenoSonsonate.Api.Controllers
     [Route("api/[controller]")]
     public class UbicacionController : ControllerBase
     {
+        private readonly IHubContext<ProcesionHub> _hubContext;
+
+        public UbicacionController(IHubContext<ProcesionHub> hubContext)
+        {
+            _hubContext = hubContext;
+        }
+
         [HttpGet("{recorridoId:int}")]
         public ActionResult<UbicacionProcesionDto> Get(int recorridoId)
         {
@@ -21,6 +30,24 @@ namespace NazarenoSonsonate.Api.Controllers
             };
 
             return Ok(ubicacion);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> Post([FromBody] UbicacionProcesionDto ubicacion)
+        {
+            if (ubicacion is null)
+                return BadRequest();
+
+            ubicacion.FechaHora = DateTime.Now;
+
+            await _hubContext.Clients
+                .Group($"recorrido-{ubicacion.RecorridoId}")
+                .SendAsync("UbicacionActualizada", ubicacion);
+
+            return Ok(new
+            {
+                mensaje = "Ubicación enviada correctamente"
+            });
         }
     }
 }

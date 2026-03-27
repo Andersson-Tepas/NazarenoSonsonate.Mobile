@@ -1,9 +1,13 @@
 ﻿@page "/mapa-recorrido/{Id:int}"
+@using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.JSInterop
+@using Microsoft.Maui.Devices.Sensors
 @using NazarenoSonsonate.Shared.DTOs
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject HttpClient Http
+@implements IAsyncDisposable
 
 <h3>Detalle del recorrido</h3>
 
@@ -30,14 +34,30 @@ else
         {
             <p class="text-muted">Recorrido pendiente de publicación.</p>
         }
+        else
+        {
+            <p class="text-success">@estadoTiempoReal</p>
+        }
     </div>
 
     @if (!string.IsNullOrWhiteSpace(recorrido.RutaGeoJson))
     {
         <div id="mapa-recorrido" style="height: 450px; width: 100%; border-radius: 12px;"></div>
-    }
 
-    <button class="btn btn-secondary mt-3" @onclick="Volver">Volver</button>
+        <div class="mt-3 d-flex gap-2">
+            <button class="btn btn-primary" @onclick="MostrarMiUbicacion">
+                Mi ubicación
+            </button>
+
+            <button class="btn btn-secondary" @onclick="Volver">
+                Volver
+            </button>
+        </div>
+    }
+    else
+    {
+        <button class="btn btn-secondary mt-3" @onclick="Volver">Volver</button>
+    }
 }
 
 @code {
@@ -48,6 +68,8 @@ else
     private bool cargando = true;
     private string? error;
     private bool mapaDibujado;
+    private HubConnection? hubConnection;
+    private string estadoTiempoReal = "Conectando tiempo real...";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -56,6 +78,14 @@ else
             cargando = true;
             error = null;
             mapaDibujado = false;
+            estadoTiempoReal = "Conectando tiempo real...";
+
+            if (hubConnection is not null)
+            {
+                await hubConnection.DisposeAsync();
+                hubConnection = null;
+            }
+
             recorrido = await RecorridoService.ObtenerRecorridoPorIdAsync(Id);
         }
         catch (Exception ex)
@@ -77,12 +107,115 @@ else
         {
             await JS.InvokeVoidAsync("mapaRecorrido.init", "mapa-recorrido", 13.7189, -89.7242, 16);
             await JS.InvokeVoidAsync("mapaRecorrido.drawGeoJson", recorrido.RutaGeoJson);
+
+            await IniciarTiempoReal();
+            await MostrarMiUbicacion();
+
             mapaDibujado = true;
+        }
+    }
+
+    private async Task IniciarTiempoReal()
+    {
+        if (Http.BaseAddress is null)
+        {
+            estadoTiempoReal = "No se pudo resolver la URL de la API.";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        var hubUrl = new Uri(Http.BaseAddress, "hubs/procesion");
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(hubUrl.ToString())
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<UbicacionProcesionDto>("UbicacionActualizada", async dto =>
+        {
+            if (dto.RecorridoId != Id)
+                return;
+
+            await JS.InvokeVoidAsync(
+                "mapaRecorrido.actualizarMarcadorTiempoReal",
+                dto.Latitud,
+                dto.Longitud,
+                dto.GrupoActual ?? "",
+                dto.Mensaje ?? "",
+                dto.FechaHora.ToString("g"));
+
+            estadoTiempoReal = $"Última ubicación: {dto.GrupoActual}";
+            await InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+        await hubConnection.InvokeAsync("UnirseRecorrido", Id);
+
+        estadoTiempoReal = "Seguimiento en vivo activo.";
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task MostrarMiUbicacion()
+    {
+        try
+        {
+            var permiso = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+
+            if (permiso != PermissionStatus.Granted)
+                permiso = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+
+            if (permiso != PermissionStatus.Granted)
+            {
+                estadoTiempoReal = "Permiso de ubicación denegado.";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            var request = new GeolocationRequest(
+                GeolocationAccuracy.Best,
+                TimeSpan.FromSeconds(10));
+
+            var location = await Geolocation.Default.GetLocationAsync(request);
+
+            if (location is null)
+            {
+                estadoTiempoReal = "No se pudo obtener tu ubicación.";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            await JS.InvokeVoidAsync(
+                "mapaRecorrido.mostrarMiUbicacion",
+                location.Latitude,
+                location.Longitude);
+
+            estadoTiempoReal = "Seguimiento en vivo activo. Mi ubicación cargada.";
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            estadoTiempoReal = $"Error al obtener tu ubicación: {ex.Message}";
+            await InvokeAsync(StateHasChanged);
         }
     }
 
     private void Volver()
     {
         Navigation.NavigateTo("/recorridos");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            try
+            {
+                await hubConnection.InvokeAsync("SalirRecorrido", Id);
+                await hubConnection.DisposeAsync();
+            }
+            catch
+            {
+            }
+        }
     }
 }
