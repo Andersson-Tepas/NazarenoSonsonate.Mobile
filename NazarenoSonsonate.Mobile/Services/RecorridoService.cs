@@ -27,5 +27,15 @@ namespace NazarenoSonsonate.Mobile.Services
         {
             return await _httpClient.GetFromJsonAsync<RecorridoDto>($"api/recorridos/{id}");
         }
+
+        public async Task GuardarRutaAsync(int id, string rutaGeoJson)
+        {
+            var response = await _httpClient.PutAsJsonAsync($"api/recorridos/{id}/ruta", new
+            {
+                rutaGeoJson
+            });
+
+            response.EnsureSuccessStatusCode();
+        }
     }
 }

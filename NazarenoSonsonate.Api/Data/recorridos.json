@@ -1,0 +1,42 @@
+[
+  {
+    "Id": 1,
+    "Nombre": "Lunes Santo",
+    "Descripcion": "Recorrido procesional de Lunes Santo",
+    "Tipo": 0,
+    "HoraSalida": "3:00 PM",
+    "Activo": true,
+    "RutaGeoJson": "{\u0022type\u0022:\u0022FeatureCollection\u0022,\u0022features\u0022:[{\u0022type\u0022:\u0022Feature\u0022,\u0022properties\u0022:{},\u0022geometry\u0022:{\u0022type\u0022:\u0022LineString\u0022,\u0022coordinates\u0022:[[-89.727088,13.72043],[-89.727523,13.720679]]}},{\u0022type\u0022:\u0022Feature\u0022,\u0022properties\u0022:{},\u0022geometry\u0022:{\u0022type\u0022:\u0022LineString\u0022,\u0022coordinates\u0022:[[-89.72754,13.720659],[-89.728216,13.719537]]}},{\u0022type\u0022:\u0022Feature\u0022,\u0022properties\u0022:{},\u0022geometry\u0022:{\u0022type\u0022:\u0022LineString\u0022,\u0022coordinates\u0022:[[-89.728217,13.719524],[-89.728702,13.718861]]}},{\u0022type\u0022:\u0022Feature\u0022,\u0022properties\u0022:{},\u0022geometry\u0022:{\u0022type\u0022:\u0022LineString\u0022,\u0022coordinates\u0022:[[-89.728713,13.718876],[-89.729125,13.718232]]}}]}",
+    "PuntosRuta": []
+  },
+  {
+    "Id": 2,
+    "Nombre": "Martes Santo",
+    "Descripcion": "Recorrido procesional de Martes Santo",
+    "Tipo": 1,
+    "HoraSalida": "3:00 PM",
+    "Activo": true,
+    "RutaGeoJson": null,
+    "PuntosRuta": []
+  },
+  {
+    "Id": 3,
+    "Nombre": "Mi\u00E9rcoles Santo",
+    "Descripcion": "Recorrido procesional de Mi\u00E9rcoles Santo",
+    "Tipo": 2,
+    "HoraSalida": "2:00 PM",
+    "Activo": true,
+    "RutaGeoJson": null,
+    "PuntosRuta": []
+  },
+  {
+    "Id": 4,
+    "Nombre": "Viernes Santo",
+    "Descripcion": "Recorrido procesional de Viernes Santo",
+    "Tipo": 3,
+    "HoraSalida": "6:00 AM",
+    "Activo": true,
+    "RutaGeoJson": null,
+    "PuntosRuta": []
+  }
+]

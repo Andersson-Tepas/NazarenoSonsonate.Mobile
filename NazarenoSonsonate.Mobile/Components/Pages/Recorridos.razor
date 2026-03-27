@@ -26,6 +26,20 @@ else
                 <h5>@recorrido.Nombre</h5>
                 <p>@recorrido.Descripcion</p>
                 <small>Hora de salida: @recorrido.HoraSalida</small>
+
+                <div class="mt-3 d-flex gap-2">
+                    <button class="btn btn-primary"
+                            @onclick="() => AbrirRecorrido(recorrido.Id)"
+                            @onclick:stopPropagation="true">
+                        Ver detalle
+                    </button>
+
+                    <button class="btn btn-warning"
+                            @onclick="() => AbrirEditorAdmin(recorrido.Id)"
+                            @onclick:stopPropagation="true">
+                        Editar mapa
+                    </button>
+                </div>
             </div>
         }
     </div>
@@ -55,5 +69,10 @@ else
     private void AbrirRecorrido(int id)
     {
         Navigation.NavigateTo($"/mapa-recorrido/{id}");
+    }
+
+    private void AbrirEditorAdmin(int id)
+    {
+        Navigation.NavigateTo($"/admin/recorrido-editor/{id}");
     }
 }

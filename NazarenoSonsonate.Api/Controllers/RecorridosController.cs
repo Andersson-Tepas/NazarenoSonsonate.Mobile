@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using NazarenoSonsonate.Shared.DTOs;
 using NazarenoSonsonate.Shared.Enums;
+using System.Text.Json;
 
 namespace NazarenoSonsonate.Api.Controllers
 {
@@ -8,16 +9,39 @@ namespace NazarenoSonsonate.Api.Controllers
     [Route("api/[controller]")]
     public class RecorridosController : ControllerBase
     {
+        private readonly string _filePath;
+
+        public RecorridosController(IWebHostEnvironment env)
+        {
+            var dataFolder = Path.Combine(env.ContentRootPath, "Data");
+            Directory.CreateDirectory(dataFolder);
+
+            _filePath = Path.Combine(dataFolder, "recorridos.json");
+
+            if (!System.IO.File.Exists(_filePath))
+            {
+                var iniciales = ObtenerRecorridosIniciales();
+                var json = JsonSerializer.Serialize(iniciales, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+
+                System.IO.File.WriteAllText(_filePath, json);
+            }
+        }
+
         [HttpGet]
         public ActionResult<List<RecorridoDto>> Get()
         {
-            return Ok(ObtenerRecorridosMock());
+            var recorridos = LeerRecorridos();
+            return Ok(recorridos);
         }
 
         [HttpGet("{id:int}")]
         public ActionResult<RecorridoDto> GetById(int id)
         {
-            var recorrido = ObtenerRecorridosMock().FirstOrDefault(x => x.Id == id);
+            var recorridos = LeerRecorridos();
+            var recorrido = recorridos.FirstOrDefault(x => x.Id == id);
 
             if (recorrido is null)
                 return NotFound();
@@ -25,69 +49,105 @@ namespace NazarenoSonsonate.Api.Controllers
             return Ok(recorrido);
         }
 
-        private static List<RecorridoDto> ObtenerRecorridosMock()
+        [HttpPut("{id:int}/ruta")]
+        public IActionResult GuardarRuta(int id, [FromBody] GuardarRutaRequest request)
         {
-            return new List<RecorridoDto>
-        {
-            new RecorridoDto
-            {
-                Id = 1,
-                Nombre = "Lunes Santo",
-                Descripcion = "Recorrido procesional de Lunes Santo",
-                HoraSalida = "3:00 PM",
-                Activo = true,
-                Tipo = TipoRecorrido.LunesSanto,
-                PuntosRuta = new()
-            },
-            new RecorridoDto
-            {
-                Id = 2,
-                Nombre = "Martes Santo",
-                Descripcion = "Recorrido procesional de Martes Santo",
-                HoraSalida = "3:00 PM",
-                Activo = true,
-                Tipo = TipoRecorrido.MartesSanto,
-                PuntosRuta = new()
-            },
-            new RecorridoDto
-            {
-                Id = 3,
-                Nombre = "Miércoles Santo",
-                Descripcion = "Recorrido procesional de Miércoles Santo",
-                HoraSalida = "2:00 PM",
-                Activo = true,
-                Tipo = TipoRecorrido.MiercolesSanto,
-                PuntosRuta = new()
-            },
-            new RecorridoDto
-            {
-                Id = 4,
-                Nombre = "Viernes Santo",
-                Descripcion = "Recorrido procesional de Viernes Santo",
-                HoraSalida = "6:00 AM",
-                Activo = true,
-                Tipo = TipoRecorrido.ViernesSanto,
-                PuntosRuta = new()
-            }
-        };
+            var recorridos = LeerRecorridos();
+            var recorrido = recorridos.FirstOrDefault(x => x.Id == id);
+
+            if (recorrido is null)
+                return NotFound();
+
+            recorrido.RutaGeoJson = request.RutaGeoJson;
+            GuardarRecorridos(recorridos);
+
+            return NoContent();
         }
 
-        private static List<PuntoRutaDto> CrearPuntosMock(double latBase, double lngBase, params string[] referencias)
+        private List<RecorridoDto> LeerRecorridos()
         {
-            var puntos = new List<PuntoRutaDto>();
+            if (!System.IO.File.Exists(_filePath))
+                return ObtenerRecorridosIniciales();
 
-            for (int i = 0; i < referencias.Length; i++)
+            var json = System.IO.File.ReadAllText(_filePath);
+
+            if (string.IsNullOrWhiteSpace(json))
+                return ObtenerRecorridosIniciales();
+
+            var options = new JsonSerializerOptions
             {
-                puntos.Add(new PuntoRutaDto
-                {
-                    Orden = i + 1,
-                    Referencia = referencias[i],
-                    Latitud = latBase + (i * 0.0008),
-                    Longitud = lngBase + ((i % 2 == 0 ? 1 : -1) * 0.0006)
-                });
-            }
+                PropertyNameCaseInsensitive = true
+            };
 
-            return puntos;
+            return JsonSerializer.Deserialize<List<RecorridoDto>>(json, options)
+                   ?? ObtenerRecorridosIniciales();
+        }
+
+        private void GuardarRecorridos(List<RecorridoDto> recorridos)
+        {
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true
+            };
+
+            var json = JsonSerializer.Serialize(recorridos, options);
+            System.IO.File.WriteAllText(_filePath, json);
+        }
+
+        private static List<RecorridoDto> ObtenerRecorridosIniciales()
+        {
+            return new List<RecorridoDto>
+            {
+                new RecorridoDto
+                {
+                    Id = 1,
+                    Nombre = "Lunes Santo",
+                    Descripcion = "Recorrido procesional de Lunes Santo",
+                    HoraSalida = "3:00 PM",
+                    Activo = true,
+                    Tipo = TipoRecorrido.LunesSanto,
+                    PuntosRuta = new(),
+                    RutaGeoJson = null
+                },
+                new RecorridoDto
+                {
+                    Id = 2,
+                    Nombre = "Martes Santo",
+                    Descripcion = "Recorrido procesional de Martes Santo",
+                    HoraSalida = "3:00 PM",
+                    Activo = true,
+                    Tipo = TipoRecorrido.MartesSanto,
+                    PuntosRuta = new(),
+                    RutaGeoJson = null
+                },
+                new RecorridoDto
+                {
+                    Id = 3,
+                    Nombre = "Miércoles Santo",
+                    Descripcion = "Recorrido procesional de Miércoles Santo",
+                    HoraSalida = "2:00 PM",
+                    Activo = true,
+                    Tipo = TipoRecorrido.MiercolesSanto,
+                    PuntosRuta = new(),
+                    RutaGeoJson = null
+                },
+                new RecorridoDto
+                {
+                    Id = 4,
+                    Nombre = "Viernes Santo",
+                    Descripcion = "Recorrido procesional de Viernes Santo",
+                    HoraSalida = "6:00 AM",
+                    Activo = true,
+                    Tipo = TipoRecorrido.ViernesSanto,
+                    PuntosRuta = new(),
+                    RutaGeoJson = null
+                }
+            };
+        }
+
+        public class GuardarRutaRequest
+        {
+            public string RutaGeoJson { get; set; } = string.Empty;
         }
     }
 }

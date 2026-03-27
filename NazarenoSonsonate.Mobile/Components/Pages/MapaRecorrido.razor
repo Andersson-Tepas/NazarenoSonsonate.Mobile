@@ -1,7 +1,9 @@
 ﻿@page "/mapa-recorrido/{Id:int}"
+@using Microsoft.JSInterop
 @using NazarenoSonsonate.Shared.DTOs
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <h3>Detalle del recorrido</h3>
 
@@ -23,8 +25,17 @@ else
         <h4>@recorrido.Nombre</h4>
         <p>@recorrido.Descripcion</p>
         <p><strong>Hora de salida:</strong> @recorrido.HoraSalida</p>
-        <p class="text-muted">Recorrido pendiente de publicación.</p>
+
+        @if (string.IsNullOrWhiteSpace(recorrido.RutaGeoJson))
+        {
+            <p class="text-muted">Recorrido pendiente de publicación.</p>
+        }
     </div>
+
+    @if (!string.IsNullOrWhiteSpace(recorrido.RutaGeoJson))
+    {
+        <div id="mapa-recorrido" style="height: 450px; width: 100%; border-radius: 12px;"></div>
+    }
 
     <button class="btn btn-secondary mt-3" @onclick="Volver">Volver</button>
 }
@@ -36,6 +47,7 @@ else
     private RecorridoDto? recorrido;
     private bool cargando = true;
     private string? error;
+    private bool mapaDibujado;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -43,6 +55,7 @@ else
         {
             cargando = true;
             error = null;
+            mapaDibujado = false;
             recorrido = await RecorridoService.ObtenerRecorridoPorIdAsync(Id);
         }
         catch (Exception ex)
@@ -52,6 +65,19 @@ else
         finally
         {
             cargando = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!cargando &&
+            !mapaDibujado &&
+            recorrido is not null &&
+            !string.IsNullOrWhiteSpace(recorrido.RutaGeoJson))
+        {
+            await JS.InvokeVoidAsync("mapaRecorrido.init", "mapa-recorrido", 13.7189, -89.7242, 16);
+            await JS.InvokeVoidAsync("mapaRecorrido.drawGeoJson", recorrido.RutaGeoJson);
+            mapaDibujado = true;
         }
     }
 
