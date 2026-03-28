@@ -10,8 +10,16 @@
     <link rel="stylesheet" href="NazarenoSonsonate.Mobile.styles.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
 
+    <!-- Lo dejo porque tu mapa admin todavía usa Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+
+    <script>
+        window.googleMapsReady = false;
+        window.nazarenoGoogleMapsLoaded = function () {
+            window.googleMapsReady = true;
+        };
+    </script>
 </head>
 
 <body>
@@ -27,8 +35,15 @@
     </div>
 
     <script src="_framework/blazor.webview.js" autostart="false"></script>
+
+    <!-- Leaflet se queda solo por el mapa admin -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+    <!-- Reemplaza TU_API_KEY_AQUI por tu clave -->
+    <script async defer
+            src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBfVQADIjXfJSWGD-14tz4cuLfc8Pv8pcA&loading=async&callback=nazarenoGoogleMapsLoaded"></script>
+
     <script src="js/mapaRecorrido.js"></script>
     <script src="js/mapaRecorridoAdmin.js"></script>
 

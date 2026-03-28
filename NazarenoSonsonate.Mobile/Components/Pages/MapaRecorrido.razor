@@ -105,11 +105,11 @@ else
             recorrido is not null &&
             !string.IsNullOrWhiteSpace(recorrido.RutaGeoJson))
         {
+            await JS.InvokeVoidAsync("mapaRecorrido.esperarGoogleMaps");
             await JS.InvokeVoidAsync("mapaRecorrido.init", "mapa-recorrido", 13.7189, -89.7242, 16);
             await JS.InvokeVoidAsync("mapaRecorrido.drawGeoJson", recorrido.RutaGeoJson);
 
             await IniciarTiempoReal();
-            await MostrarMiUbicacion();
 
             mapaDibujado = true;
         }
@@ -187,9 +187,10 @@ else
             await JS.InvokeVoidAsync(
                 "mapaRecorrido.mostrarMiUbicacion",
                 location.Latitude,
-                location.Longitude);
+                location.Longitude,
+                true);
 
-            estadoTiempoReal = "Seguimiento en vivo activo. Mi ubicación cargada.";
+            estadoTiempoReal = "Mi ubicación cargada.";
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)

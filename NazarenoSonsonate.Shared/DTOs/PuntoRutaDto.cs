@@ -14,5 +14,6 @@ namespace NazarenoSonsonate.Shared.DTOs
         public double Longitud { get; set; }
         public int Orden { get; set; }
         public string? Referencia { get; set; }
+        public string? Grupo { get; set; }
     }
 }

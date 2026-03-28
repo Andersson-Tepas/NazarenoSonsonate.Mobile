@@ -1,49 +1,173 @@
 ﻿@page "/admin/recorrido-editor/{Id:int}"
+@using System.Text.Json
 @using Microsoft.JSInterop
+@using NazarenoSonsonate.Shared.DTOs
 @inject IJSRuntime JS
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
 @inject NavigationManager Navigation
 
-<h3>Editor de recorrido @Id</h3>
+<h3>Editor de recorrido</h3>
 
-<div id="mapa-admin" style="height: 500px; width: 100%; border-radius: 12px;"></div>
+@if (cargando)
+{
+    <p>Cargando recorrido...</p>
+}
+else if (!string.IsNullOrWhiteSpace(error))
+{
+    <p class="text-danger">@error</p>
+}
+else if (recorrido is null)
+{
+    <p>No se encontró el recorrido.</p>
+}
+else
+{
+    <div class="card p-3 mb-3">
+        <h4>@recorrido.Nombre</h4>
+        <p>@recorrido.Descripcion</p>
+        <p><strong>Hora de salida:</strong> @recorrido.HoraSalida</p>
+        <p class="text-muted">
+            Toca el mapa para agregar puntos a la ruta.
+            Usa “Agregar checkpoint” para marcar lugares donde quieras guardar referencia y grupo.
+        </p>
+    </div>
 
-<div class="mt-3 d-flex gap-2">
-    <button class="btn btn-primary" @onclick="GuardarRuta">
-        Guardar ruta
-    </button>
+    <div id="mapa-admin" style="height: 500px; width: 100%; border-radius: 12px;"></div>
 
-    <button class="btn btn-secondary" @onclick="VolverARecorridos">
-        Volver a recorridos
-    </button>
-</div>
+    <div class="mt-3 d-flex gap-2 flex-wrap">
+        <button class="btn btn-info" @onclick="ActivarCheckpoint">
+            Agregar checkpoint
+        </button>
 
-<p class="mt-3">@mensaje</p>
+        <button class="btn btn-warning" @onclick="DeshacerUltimoPunto">
+            Deshacer último punto
+        </button>
+
+        <button class="btn btn-danger" @onclick="LimpiarRuta">
+            Limpiar ruta
+        </button>
+
+        <button class="btn btn-outline-danger" @onclick="LimpiarCheckpoints">
+            Limpiar checkpoints
+        </button>
+
+        <button class="btn btn-primary" @onclick="GuardarMapa">
+            Guardar ruta y checkpoints
+        </button>
+
+        <button class="btn btn-secondary" @onclick="VolverARecorridos">
+            Volver
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(mensaje))
+    {
+        <p class="mt-3 text-success">@mensaje</p>
+    }
+}
 
 @code {
     [Parameter]
     public int Id { get; set; }
 
+    private RecorridoDto? recorrido;
+    private bool cargando = true;
+    private string? error;
     private string? mensaje;
+    private bool mapaInicializado;
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task OnParametersSetAsync()
     {
-        if (firstRender)
+        try
         {
-            await JS.InvokeVoidAsync("mapaRecorridoAdmin.init", "mapa-admin", 13.7189, -89.7242, 16);
+            cargando = true;
+            error = null;
+            mensaje = null;
+            mapaInicializado = false;
+
+            recorrido = await RecorridoService.ObtenerRecorridoPorIdAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            error = $"Error al cargar recorrido: {ex.Message}";
+        }
+        finally
+        {
+            cargando = false;
         }
     }
 
-    private async Task GuardarRuta()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var geoJson = await JS.InvokeAsync<object>("mapaRecorridoAdmin.getGeoJson");
-        var texto = System.Text.Json.JsonSerializer.Serialize(geoJson);
+        if (!cargando && !mapaInicializado && recorrido is not null)
+        {
+            var checkpointsJson = JsonSerializer.Serialize(recorrido.PuntosRuta);
 
-        await RecorridoService.GuardarRutaAsync(Id, texto);
-        mensaje = "Ruta guardada correctamente.";
+            await JS.InvokeVoidAsync("mapaRecorridoAdmin.esperarGoogleMaps");
+            await JS.InvokeVoidAsync(
+                "mapaRecorridoAdmin.init",
+                "mapa-admin",
+                13.7189,
+                -89.7242,
+                16,
+                recorrido.RutaGeoJson,
+                checkpointsJson);
 
-        await Task.Delay(800);
-        Navigation.NavigateTo("/recorridos");
+            mapaInicializado = true;
+        }
+    }
+
+    private async Task ActivarCheckpoint()
+    {
+        await JS.InvokeVoidAsync("mapaRecorridoAdmin.activarModoCheckpoint");
+        mensaje = "Toca el mapa para agregar el checkpoint.";
+    }
+
+    private async Task DeshacerUltimoPunto()
+    {
+        await JS.InvokeVoidAsync("mapaRecorridoAdmin.deshacerUltimoPunto");
+    }
+
+    private async Task LimpiarRuta()
+    {
+        await JS.InvokeVoidAsync("mapaRecorridoAdmin.limpiarRuta");
+    }
+
+    private async Task LimpiarCheckpoints()
+    {
+        await JS.InvokeVoidAsync("mapaRecorridoAdmin.limpiarCheckpoints");
+    }
+    private async Task GuardarMapa()
+    {
+        try
+        {
+            var geoJsonObj = await JS.InvokeAsync<object>("mapaRecorridoAdmin.getGeoJson");
+            var checkpointsObj = await JS.InvokeAsync<object>("mapaRecorridoAdmin.getCheckpoints");
+
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+
+            var dto = new GuardarMapaRecorridoDto
+            {
+                RutaGeoJson = JsonSerializer.Serialize(geoJsonObj),
+                PuntosRuta = JsonSerializer.Deserialize<List<PuntoRutaDto>>(
+                    JsonSerializer.Serialize(checkpointsObj), options) ?? new()
+            };
+
+            foreach (var punto in dto.PuntosRuta)
+            {
+                punto.RecorridoId = Id;
+            }
+
+            await RecorridoService.GuardarMapaAsync(Id, dto);
+            mensaje = "Ruta y checkpoints guardados correctamente.";
+        }
+        catch (Exception ex)
+        {
+            mensaje = $"Error al guardar: {ex.Message}";
+        }
     }
 
     private void VolverARecorridos()

@@ -10,6 +10,7 @@ namespace NazarenoSonsonate.Api.Controllers
     public class RecorridosController : ControllerBase
     {
         private readonly string _filePath;
+        private static readonly object _fileLock = new();
 
         public RecorridosController(IWebHostEnvironment env)
         {
@@ -64,34 +65,68 @@ namespace NazarenoSonsonate.Api.Controllers
             return NoContent();
         }
 
+        [HttpPut("{id:int}/mapa")]
+        public IActionResult GuardarMapa(int id, [FromBody] GuardarMapaRecorridoDto request)
+        {
+            var recorridos = LeerRecorridos();
+            var recorrido = recorridos.FirstOrDefault(x => x.Id == id);
+
+            if (recorrido is null)
+                return NotFound();
+
+            recorrido.RutaGeoJson = request.RutaGeoJson;
+            recorrido.PuntosRuta = request.PuntosRuta ?? new List<PuntoRutaDto>();
+
+            for (int i = 0; i < recorrido.PuntosRuta.Count; i++)
+            {
+                recorrido.PuntosRuta[i].RecorridoId = id;
+                recorrido.PuntosRuta[i].Orden = i + 1;
+            }
+
+            GuardarRecorridos(recorridos);
+
+            return NoContent();
+        }
+
         private List<RecorridoDto> LeerRecorridos()
         {
-            if (!System.IO.File.Exists(_filePath))
-                return ObtenerRecorridosIniciales();
-
-            var json = System.IO.File.ReadAllText(_filePath);
-
-            if (string.IsNullOrWhiteSpace(json))
-                return ObtenerRecorridosIniciales();
-
-            var options = new JsonSerializerOptions
+            lock (_fileLock)
             {
-                PropertyNameCaseInsensitive = true
-            };
+                if (!System.IO.File.Exists(_filePath))
+                    return ObtenerRecorridosIniciales();
 
-            return JsonSerializer.Deserialize<List<RecorridoDto>>(json, options)
-                   ?? ObtenerRecorridosIniciales();
+                using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var reader = new StreamReader(stream);
+                var json = reader.ReadToEnd();
+
+                if (string.IsNullOrWhiteSpace(json))
+                    return ObtenerRecorridosIniciales();
+
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                return JsonSerializer.Deserialize<List<RecorridoDto>>(json, options)
+                       ?? ObtenerRecorridosIniciales();
+            }
         }
 
         private void GuardarRecorridos(List<RecorridoDto> recorridos)
         {
-            var options = new JsonSerializerOptions
+            lock (_fileLock)
             {
-                WriteIndented = true
-            };
+                var options = new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                };
 
-            var json = JsonSerializer.Serialize(recorridos, options);
-            System.IO.File.WriteAllText(_filePath, json);
+                var json = JsonSerializer.Serialize(recorridos, options);
+
+                using var stream = new FileStream(_filePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                using var writer = new StreamWriter(stream);
+                writer.Write(json);
+            }
         }
 
         private static List<RecorridoDto> ObtenerRecorridosIniciales()

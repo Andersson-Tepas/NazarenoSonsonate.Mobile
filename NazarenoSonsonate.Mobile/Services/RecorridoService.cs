@@ -37,5 +37,11 @@ namespace NazarenoSonsonate.Mobile.Services
 
             response.EnsureSuccessStatusCode();
         }
+
+        public async Task GuardarMapaAsync(int recorridoId, GuardarMapaRecorridoDto dto)
+        {
+            var response = await _httpClient.PutAsJsonAsync($"api/recorridos/{recorridoId}/mapa", dto);
+            response.EnsureSuccessStatusCode();
+        }
     }
 }
