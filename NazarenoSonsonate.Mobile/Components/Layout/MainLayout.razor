@@ -1,26 +1,21 @@
 ﻿@inherits LayoutComponentBase
 
-<div style="background-color:purple; min-height:100vh;">
+<div class="app-container">
 
-    <!-- HEADER PERSONALIZADO -->
-    <div style="display:flex; align-items:center; padding:15px;">
+    <!-- HEADER -->
+    <div class="app-header">
 
-        <img src="logo-insta.jpg"
-             style="width:50px; height:50px; border-radius:50%; margin-right:15px;" />
+        <img src="logo-insta.jpg" class="logo" />
 
-        <div>
-            <div style="color:gold; font-size:22px;">
-                Jesús Nazareno
-            </div>
-
-            <div style="color:gold; font-size:14px;">
-                Sonsonate
-            </div>
+        <div class="titulo-container">
+            <div class="titulo">Jesús Nazareno</div>
+            <div class="subtitulo">Sonsonate</div>
         </div>
+
     </div>
 
     <!-- CONTENIDO -->
-    <div style="padding:15px;">
+    <div class="app-body">
         @Body
     </div>
 
