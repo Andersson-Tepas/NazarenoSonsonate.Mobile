@@ -1,6 +1,9 @@
-using NazarenoSonsonate.Api.Hubs;
+﻿using NazarenoSonsonate.Api.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// 🔥 PERMITIR ACCESO DESDE RED (CELULAR)
+builder.WebHost.UseUrls("http://0.0.0.0:5180");
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
