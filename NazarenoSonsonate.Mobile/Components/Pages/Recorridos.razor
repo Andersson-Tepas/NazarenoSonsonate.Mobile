@@ -5,30 +5,11 @@
 
 <style>
     /* Estilos exclusivos para la página de Recorridos */
-    .page-title {
-        margin-bottom: 30px;
-        margin-top: 10px;
-    }
-
-    .main-title {
-        font-size: 32px;
-        font-family: Georgia, serif;
-        font-style: italic;
-        color: #fcefd6;
-        margin-bottom: 5px;
-    }
-
-    .subtitle {
-        font-size: 14px;
-        color: #c085b3;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-
     .cards-container {
         display: flex;
         flex-direction: column;
         gap: 20px;
+        margin-top: 10px; /* Un pequeño respiro arriba */
     }
 
     .card-item {
@@ -145,11 +126,6 @@
         }
 </style>
 
-<div class="page-title">
-    <div class="main-title">Jesús Nazareno - Sonsonate</div>
-    <div class="subtitle">Recorridos Procesionales 2026-2030</div>
-</div>
-
 @if (cargando)
 {
     <p style="color:#fcefd6; font-style: italic;">Cargando recorridos...</p>
@@ -236,7 +212,6 @@ else
         Navigation.NavigateTo($"/admin/recorrido-editor/{id}");
     }
 
-    // NUEVA FUNCIÓN PARA OBTENER LA IMAGEN
     private string ObtenerImagenPorDia(string nombreRecorrido)
     {
         if (string.IsNullOrWhiteSpace(nombreRecorrido)) return "images/default.jpg";
