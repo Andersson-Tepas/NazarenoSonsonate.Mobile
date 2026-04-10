@@ -6,65 +6,321 @@
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
 @inject NavigationManager Navigation
 
-<h3>Editor de recorrido</h3>
+<style>
+    /* FORZAMOS PANTALLA COMPLETA IGNORANDO EL MAINLAYOUT */
+    .editor-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: #120516; /* Tu morado oscuro */
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        z-index: 1000;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        padding: 20px 15px;
+        overflow-y: auto; /* IMPORTANTE: Para que puedas bajar si no cabe todo */
+        box-sizing: border-box; /* Para que el padding no desborde la pantalla */
+    }
+    /* FONDO PRINCIPAL */
+    .editor-container {
+        background-color: #120516; /* Morado súper oscuro */
+        min-height: 100vh;
+        color: white;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        padding: 20px 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
 
-@if (cargando)
-{
-    <p>Cargando recorrido...</p>
-}
-else if (!string.IsNullOrWhiteSpace(error))
-{
-    <p class="text-danger">@error</p>
-}
-else if (recorrido is null)
-{
-    <p>No se encontró el recorrido.</p>
-}
-else
-{
-    <div class="card p-3 mb-3">
-        <h4>@recorrido.Nombre</h4>
-        <p>@recorrido.Descripcion</p>
-        <p><strong>Hora de salida:</strong> @recorrido.HoraSalida</p>
-        <p class="text-muted">
-            Toca el mapa para agregar puntos a la ruta.
-            Usa “Agregar checkpoint” para marcar lugares donde quieras guardar referencia y grupo.
-        </p>
-    </div>
+    /* HEADER */
+    .top-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
 
-    <div id="mapa-admin" style="height: 500px; width: 100%; border-radius: 12px;"></div>
+    .header-icon {
+        width: 24px;
+        height: 24px;
+        fill: #cbb4d6;
+        cursor: pointer;
+    }
 
-    <div class="mt-3 d-flex gap-2 flex-wrap">
-        <button class="btn btn-info" @onclick="ActivarCheckpoint">
-            Agregar checkpoint
-        </button>
+    .header-title {
+        font-family: Georgia, 'Times New Roman', Times, serif;
+        font-style: italic;
+        font-size: 20px;
+        color: #e6d3f0;
+        margin: 0;
+    }
 
-        <button class="btn btn-warning" @onclick="DeshacerUltimoPunto">
-            Deshacer último punto
-        </button>
+    /* TARJETA DE INFORMACIÓN */
+    .info-card {
+        background-color: #211029;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
 
-        <button class="btn btn-danger" @onclick="LimpiarRuta">
-            Limpiar ruta
-        </button>
+    .card-title {
+        color: #f0c579;
+        font-family: Georgia, 'Times New Roman', Times, serif;
+        font-style: italic;
+        font-size: 28px;
+        margin: 0 0 10px 0;
+    }
 
-        <button class="btn btn-outline-danger" @onclick="LimpiarCheckpoints">
-            Limpiar checkpoints
-        </button>
+    .card-subtitle {
+        color: #cbb4d6;
+        font-size: 14px;
+        margin-bottom: 15px;
+    }
 
-        <button class="btn btn-primary" @onclick="GuardarMapa">
+    .time-badge {
+        background-color: #381c47;
+        color: #d6bdec;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 15px;
+    }
+
+    .instruction-text {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #9d7c8e;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 600;
+    }
+
+    /* CONTENEDOR DEL MAPA (Google Maps) */
+    .map-container {
+        border-radius: 16px;
+        width: 100%;
+        /* LA SOLUCIÓN: */
+        flex-grow: 1; /* Se expande para llenar el espacio disponible */
+        min-height: 350px; /* NUNCA será más pequeño que esto */
+
+        border: 2px solid #381c47;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    }
+
+    /* CUADRÍCULA DE BOTONES DE ACCIÓN */
+    .action-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .btn-action {
+        border-radius: 12px;
+        border: none;
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 11px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        min-height: 80px;
+        transition: transform 0.1s ease;
+    }
+
+        .btn-action:active {
+            transform: scale(0.95);
+        }
+
+    .btn-full-width {
+        grid-column: span 2;
+    }
+
+    .bg-purple {
+        background-color: #4c1d95;
+        color: white;
+    }
+
+    .bg-dark-purple {
+        background-color: #211029;
+        color: #e5ccb3;
+    }
+
+    /* BOTÓN PRINCIPAL DE GUARDAR */
+    .btn-save {
+        background-color: #ffb703;
+        color: #452100;
+        border: none;
+        border-radius: 12px;
+        padding: 18px;
+        font-family: Georgia, 'Times New Roman', Times, serif;
+        font-style: italic;
+        font-size: 18px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+        margin-top: 5px;
+        cursor: pointer;
+    }
+
+    /* FOOTER Y MENSAJES */
+    .footer-close {
+        text-align: center;
+        color: #9d7c8e;
+        font-size: 12px;
+        letter-spacing: 2px;
+        margin-top: 10px;
+        margin-bottom: 20px;
+        text-transform: uppercase;
+        cursor: pointer;
+    }
+
+    .status-message {
+        text-align: center;
+        padding: 15px;
+        border-radius: 10px;
+        font-weight: bold;
+        margin-top: 10px;
+    }
+
+    .msg-loading {
+        background-color: #211029;
+        color: #cbb4d6;
+    }
+
+    .msg-error {
+        background-color: #4a0000;
+        color: #ffb3b3;
+    }
+
+    .msg-success {
+        background-color: #003314;
+        color: #99ffbb;
+    }
+</style>
+
+<div class="editor-container">
+
+    @if (cargando)
+    {
+        <div class="status-message msg-loading">
+            Cargando recorrido...
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="status-message msg-error">
+            @error
+        </div>
+        <div class="footer-close" @onclick="VolverARecorridos">X VOLVER</div>
+    }
+    else if (recorrido is null)
+    {
+        <div class="status-message msg-error">
+            No se encontró el recorrido.
+        </div>
+        <div class="footer-close" @onclick="VolverARecorridos">X VOLVER</div>
+    }
+    else
+    {
+        <div class="top-header">
+            <svg class="header-icon" viewBox="0 0 24 24" @onclick="VolverARecorridos">
+                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+            </svg>
+            <h2 class="header-title">@recorrido.Nombre</h2>
+            <div style="width: 24px;"></div>
+        </div>
+
+        <div class="info-card">
+            <h1 class="card-title">@recorrido.Nombre</h1>
+            <p class="card-subtitle">@recorrido.Descripcion</p>
+
+            <div class="time-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
+                </svg>
+                Hora de salida: @recorrido.HoraSalida
+            </div>
+
+            <div class="instruction-text">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63l-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.04.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z" />
+                </svg>
+                Toca el mapa para definir los puntos de la ruta
+            </div>
+        </div>
+
+        <div id="mapa-admin" class="map-container"></div>
+
+        <div class="action-grid">
+            <button class="btn-action btn-full-width bg-purple" @onclick="ActivarCheckpoint">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm-1 5h2v2h2v2h-2v2h-2v-2H9v-2h2V7z" />
+                </svg>
+                Agregar Checkpoint
+            </button>
+
+            <button class="btn-action bg-dark-purple" @onclick="DeshacerUltimoPunto">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="#f0c579">
+                    <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z" />
+                </svg>
+                Deshacer último punto
+            </button>
+
+            <button class="btn-action bg-dark-purple" @onclick="LimpiarRuta">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="#f0c579">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
+                Limpiar Ruta
+            </button>
+
+            <button class="btn-action bg-dark-purple" @onclick="LimpiarCheckpoints">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="#cbb4d6">
+                    <path d="M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                    <line x1="4" y1="4" x2="20" y2="20" stroke="#cbb4d6" stroke-width="2" />
+                </svg>
+                Limpiar Checkpoints
+            </button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(mensaje))
+        {
+            <div class="status-message msg-success">
+                @mensaje
+            </div>
+        }
+
+        <button class="btn-save" @onclick="GuardarMapa">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" />
+            </svg>
             Guardar ruta y checkpoints
         </button>
 
-        <button class="btn btn-secondary" @onclick="VolverARecorridos">
-            Volver
-        </button>
-    </div>
-
-    @if (!string.IsNullOrWhiteSpace(mensaje))
-    {
-        <p class="mt-3 text-success">@mensaje</p>
+        <div class="footer-close" @onclick="VolverARecorridos">
+            X VOLVER
+        </div>
     }
-}
+
+</div>
 
 @code {
     [Parameter]
@@ -137,6 +393,7 @@ else
     {
         await JS.InvokeVoidAsync("mapaRecorridoAdmin.limpiarCheckpoints");
     }
+
     private async Task GuardarMapa()
     {
         try

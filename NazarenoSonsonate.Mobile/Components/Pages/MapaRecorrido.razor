@@ -9,56 +9,258 @@
 @inject HttpClient Http
 @implements IAsyncDisposable
 
-<h3>Detalle del recorrido</h3>
+<style>
+    /* FORZAMOS PANTALLA COMPLETA IGNORANDO EL MAINLAYOUT */
+    .map-fullscreen-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: #1a051d;
+        display: flex;
+        flex-direction: column;
+        z-index: 1000;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
 
-@if (cargando)
-{
-    <p>Cargando recorrido...</p>
-}
-else if (!string.IsNullOrWhiteSpace(error))
-{
-    <p style="color:red;">@error</p>
-}
-else if (recorrido is null)
-{
-    <p>No se encontró el recorrido.</p>
-}
-else
-{
-    <div class="card p-3 mb-3">
-        <h4>@recorrido.Nombre</h4>
-        <p>@recorrido.Descripcion</p>
-        <p><strong>Hora de salida:</strong> @recorrido.HoraSalida</p>
+    /* HEADER SÓLIDO (Corregido para coincidir con tu diseño) */
+    .map-header {
+        width: 100%;
+        padding: 45px 20px 15px 20px; /* Padding alto para que no choque con la hora/batería del celular */
+        display: flex;
+        justify-content: space-between;
+        align-items: center; /* Alinea los textos con el badge 'EN VIVO' */
+        z-index: 10;
+        background-color: #170318; /* Mismo color morado sólido del menú de abajo */
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5); /* Sombra suave sobre el mapa */
+    }
 
-        @if (string.IsNullOrWhiteSpace(recorrido.RutaGeoJson))
+    .header-titles {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .main-title {
+        font-size: 26px;
+        font-family: Georgia, serif;
+        font-style: italic;
+        color: #fcefd6;
+        margin: 0 0 4px 0;
+    }
+
+    .subtitle {
+        font-size: 11px;
+        color: #9d759b;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        font-weight: 600;
+    }
+
+    .live-badge {
+        font-size: 12px;
+        color: #fcefd6;
+        font-weight: bold;
+        letter-spacing: 1px;
+    }
+
+    /* CONTENEDOR DEL MAPA REAL */
+    .map-view {
+        flex-grow: 1;
+        width: 100%;
+        height: 100%;
+        position: relative;
+    }
+
+    #mapa-recorrido {
+        width: 100%;
+        height: 100%;
+    }
+
+    /* MENSAJES DE CARGA / ERROR (CENTRADOS) */
+    .status-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: rgba(43, 0, 42, 0.9);
+        padding: 20px;
+        border-radius: 12px;
+        color: #fcefd6;
+        text-align: center;
+        z-index: 20;
+        border: 1px solid rgba(252, 239, 214, 0.2);
+    }
+
+    /* BOTONES FLOTANTES DEL MAPA */
+    .map-controls {
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        z-index: 10;
+    }
+
+    .control-btn {
+        width: 45px;
+        height: 45px;
+        border-radius: 12px;
+        background-color: rgba(43, 0, 42, 0.85);
+        border: 1px solid rgba(252, 239, 214, 0.1);
+        color: #fcefd6;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        backdrop-filter: blur(5px);
+        pointer-events: auto;
+    }
+
+        .control-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+    /* BARRA DE NAVEGACIÓN INFERIOR */
+    .bottom-nav {
+        background-color: #170318;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 5px 25px 5px;
+        box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+        z-index: 10;
+    }
+
+    .nav-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 0;
+        color: #7a5278;
+        cursor: pointer;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+    }
+
+        .nav-item.active {
+            background-color: #3b0939;
+            color: #fcefd6;
+        }
+
+    .nav-icon {
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .nav-icon svg {
+            width: 22px;
+            height: 22px;
+            fill: currentColor;
+        }
+
+    .nav-text {
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+        text-align: center;
+    }
+</style>
+
+<div class="map-fullscreen-container">
+
+    <header class="map-header">
+        <div class="header-titles">
+            <h1 class="main-title">@recorrido?.Nombre</h1>
+            <span class="subtitle">@estadoTiempoReal</span>
+        </div>
+        <div class="live-badge">EN VIVO</div>
+    </header>
+
+    <div class="map-view">
+
+        @if (cargando)
         {
-            <p class="text-muted">Recorrido pendiente de publicación.</p>
+            <div class="status-overlay">Cargando recorrido...</div>
+        }
+        else if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="status-overlay" style="color: #ff6b6b;">@error</div>
+            <button class="btn btn-secondary mt-3" style="position:absolute; top: 60%; left:50%; transform:translateX(-50%); z-index:20;" @onclick="Volver">Volver</button>
+        }
+        else if (recorrido is null)
+        {
+            <div class="status-overlay">No se encontró el recorrido.</div>
+            <button class="btn btn-secondary mt-3" style="position:absolute; top: 60%; left:50%; transform:translateX(-50%); z-index:20;" @onclick="Volver">Volver</button>
+        }
+        else if (string.IsNullOrWhiteSpace(recorrido.RutaGeoJson))
+        {
+            <div class="status-overlay">Recorrido pendiente de publicación.</div>
+            <button class="btn btn-secondary mt-3" style="position:absolute; top: 60%; left:50%; transform:translateX(-50%); z-index:20;" @onclick="Volver">Volver</button>
         }
         else
         {
-            <p class="text-success">@estadoTiempoReal</p>
+            <div id="mapa-recorrido"></div>
+
+            <div class="map-controls">
+                <button class="control-btn" title="Volver" @onclick="Volver">
+                    <svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </button>
+
+                <button class="control-btn" title="Mi Ubicación" @onclick="MostrarMiUbicacion">
+                    <svg viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" fill="none" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="10" r="3" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                </button>
+            </div>
         }
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(recorrido.RutaGeoJson))
-    {
-        <div id="mapa-recorrido" style="height: 450px; width: 100%; border-radius: 12px;"></div>
-
-        <div class="mt-3 d-flex gap-2">
-            <button class="btn btn-primary" @onclick="MostrarMiUbicacion">
-                Mi ubicación
-            </button>
-
-            <button class="btn btn-secondary" @onclick="Volver">
-                Volver
-            </button>
+    <nav class="bottom-nav">
+        <div class="nav-item active">
+            <div class="nav-icon">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="12" r="4" fill="currentColor" /></svg>
+            </div>
+            <span class="nav-text">Procesión</span>
         </div>
-    }
-    else
-    {
-        <button class="btn btn-secondary mt-3" @onclick="Volver">Volver</button>
-    }
-}
+
+        <div class="nav-item" @onclick="MostrarMiUbicacion">
+            <div class="nav-icon">
+                <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="none" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="10" r="3" fill="currentColor" /></svg>
+            </div>
+            <span class="nav-text">Ubicación</span>
+        </div>
+
+        <div class="nav-item">
+            <div class="nav-icon">
+                <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+            </div>
+            <span class="nav-text">Cargador</span>
+        </div>
+
+        <div class="nav-item">
+            <div class="nav-icon">
+                <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" /><path d="M12 3a4 4 0 0 0-4 4v1a4 4 0 0 0 8 0V7a4 4 0 0 0-4-4z" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+            </div>
+            <span class="nav-text">Cargadora</span>
+        </div>
+
+        <div class="nav-item">
+            <div class="nav-icon">
+                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" /><circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" fill="none" stroke="currentColor" stroke-width="2" /><path d="M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+            </div>
+            <span class="nav-text">Grupos</span>
+        </div>
+    </nav>
+
+</div>
 
 @code {
     [Parameter]
@@ -69,7 +271,7 @@ else
     private string? error;
     private bool mapaDibujado;
     private HubConnection? hubConnection;
-    private string estadoTiempoReal = "Conectando tiempo real...";
+    private string estadoTiempoReal = "UBICACIÓN EN VIVO"; // Lo cambié directo para que coincida con tu diseño
 
     protected override async Task OnParametersSetAsync()
     {
@@ -78,7 +280,7 @@ else
             cargando = true;
             error = null;
             mapaDibujado = false;
-            estadoTiempoReal = "Conectando tiempo real...";
+            estadoTiempoReal = "UBICACIÓN EN VIVO";
 
             if (hubConnection is not null)
             {
@@ -143,15 +345,10 @@ else
                 dto.GrupoActual ?? "",
                 dto.Mensaje ?? "",
                 dto.FechaHora.ToString("g"));
-
-            estadoTiempoReal = $"Última ubicación: {dto.GrupoActual}";
-            await InvokeAsync(StateHasChanged);
         });
 
         await hubConnection.StartAsync();
         await hubConnection.InvokeAsync("UnirseRecorrido", Id);
-
-        estadoTiempoReal = "Seguimiento en vivo activo.";
         await InvokeAsync(StateHasChanged);
     }
 
@@ -166,8 +363,6 @@ else
 
             if (permiso != PermissionStatus.Granted)
             {
-                estadoTiempoReal = "Permiso de ubicación denegado.";
-                await InvokeAsync(StateHasChanged);
                 return;
             }
 
@@ -179,8 +374,6 @@ else
 
             if (location is null)
             {
-                estadoTiempoReal = "No se pudo obtener tu ubicación.";
-                await InvokeAsync(StateHasChanged);
                 return;
             }
 
@@ -189,14 +382,9 @@ else
                 location.Latitude,
                 location.Longitude,
                 true);
-
-            estadoTiempoReal = "Mi ubicación cargada.";
-            await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
-            estadoTiempoReal = $"Error al obtener tu ubicación: {ex.Message}";
-            await InvokeAsync(StateHasChanged);
         }
     }
 
