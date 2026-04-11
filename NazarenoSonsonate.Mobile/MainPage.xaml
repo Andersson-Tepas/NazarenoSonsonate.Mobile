@@ -4,7 +4,9 @@
              xmlns:local="clr-namespace:NazarenoSonsonate.Mobile"
              x:Class="NazarenoSonsonate.Mobile.MainPage">
 
-    <BlazorWebView x:Name="blazorWebView" HostPage="wwwroot/index.html">
+    <BlazorWebView x:Name="blazorWebView"
+                   HostPage="wwwroot/index.html"
+                   StartPath="/splashscreen">
         <BlazorWebView.RootComponents>
             <RootComponent Selector="#app" ComponentType="{x:Type local:Components.Routes}" />
         </BlazorWebView.RootComponents>

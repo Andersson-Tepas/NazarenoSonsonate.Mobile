@@ -1,16 +1,15 @@
 ﻿@page "/mapa-recorrido/{Id:int}"
 @using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.JSInterop
+@using Microsoft.Maui.ApplicationModel
 @using Microsoft.Maui.Devices.Sensors
 @using NazarenoSonsonate.Shared.DTOs
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
-@inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject HttpClient Http
 @implements IAsyncDisposable
 
 <style>
-    /* FORZAMOS PANTALLA COMPLETA IGNORANDO EL MAINLAYOUT */
     .map-fullscreen-container {
         position: fixed;
         top: 0;
@@ -24,16 +23,15 @@
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* HEADER SÓLIDO (Corregido para coincidir con tu diseño) */
     .map-header {
         width: 100%;
-        padding: 45px 20px 15px 20px; /* Padding alto para que no choque con la hora/batería del celular */
+        padding: 45px 20px 15px 20px;
         display: flex;
         justify-content: space-between;
-        align-items: center; /* Alinea los textos con el badge 'EN VIVO' */
+        align-items: center;
         z-index: 10;
-        background-color: #170318; /* Mismo color morado sólido del menú de abajo */
-        box-shadow: 0 4px 15px rgba(0,0,0,0.5); /* Sombra suave sobre el mapa */
+        background-color: #170318;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
 
     .header-titles {
@@ -64,7 +62,6 @@
         letter-spacing: 1px;
     }
 
-    /* CONTENEDOR DEL MAPA REAL */
     .map-view {
         flex-grow: 1;
         width: 100%;
@@ -77,7 +74,6 @@
         height: 100%;
     }
 
-    /* MENSAJES DE CARGA / ERROR (CENTRADOS) */
     .status-overlay {
         position: absolute;
         top: 50%;
@@ -92,40 +88,6 @@
         border: 1px solid rgba(252, 239, 214, 0.2);
     }
 
-    /* BOTONES FLOTANTES DEL MAPA */
-    .map-controls {
-        position: absolute;
-        right: 15px;
-        top: 50%;
-        transform: translateY(-50%);
-        display: flex;
-        flex-direction: column;
-        gap: 15px;
-        z-index: 10;
-    }
-
-    .control-btn {
-        width: 45px;
-        height: 45px;
-        border-radius: 12px;
-        background-color: rgba(43, 0, 42, 0.85);
-        border: 1px solid rgba(252, 239, 214, 0.1);
-        color: #fcefd6;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        cursor: pointer;
-        backdrop-filter: blur(5px);
-        pointer-events: auto;
-    }
-
-        .control-btn svg {
-            width: 20px;
-            height: 20px;
-            fill: currentColor;
-        }
-
-    /* BARRA DE NAVEGACIÓN INFERIOR */
     .bottom-nav {
         background-color: #170318;
         display: flex;
@@ -195,66 +157,70 @@
         else if (!string.IsNullOrWhiteSpace(error))
         {
             <div class="status-overlay" style="color: #ff6b6b;">@error</div>
-            <button class="btn btn-secondary mt-3" style="position:absolute; top: 60%; left:50%; transform:translateX(-50%); z-index:20;" @onclick="Volver">Volver</button>
         }
         else if (recorrido is null)
         {
             <div class="status-overlay">No se encontró el recorrido.</div>
-            <button class="btn btn-secondary mt-3" style="position:absolute; top: 60%; left:50%; transform:translateX(-50%); z-index:20;" @onclick="Volver">Volver</button>
         }
         else if (string.IsNullOrWhiteSpace(recorrido.RutaGeoJson))
         {
             <div class="status-overlay">Recorrido pendiente de publicación.</div>
-            <button class="btn btn-secondary mt-3" style="position:absolute; top: 60%; left:50%; transform:translateX(-50%); z-index:20;" @onclick="Volver">Volver</button>
         }
         else
         {
             <div id="mapa-recorrido"></div>
-
-            <div class="map-controls">
-                <button class="control-btn" title="Volver" @onclick="Volver">
-                    <svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                </button>
-
-                <button class="control-btn" title="Mi Ubicación" @onclick="MostrarMiUbicacion">
-                    <svg viewBox="0 0 24 24"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" fill="none" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="10" r="3" fill="none" stroke="currentColor" stroke-width="2" /></svg>
-                </button>
-            </div>
         }
     </div>
 
     <nav class="bottom-nav">
         <div class="nav-item active">
             <div class="nav-icon">
-                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="12" r="4" fill="currentColor" /></svg>
+                <svg viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
+                    <circle cx="12" cy="12" r="4" fill="currentColor" />
+                </svg>
             </div>
             <span class="nav-text">Procesión</span>
         </div>
 
         <div class="nav-item" @onclick="MostrarMiUbicacion">
             <div class="nav-icon">
-                <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="none" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="10" r="3" fill="currentColor" /></svg>
+                <svg viewBox="0 0 24 24">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="none" stroke="currentColor" stroke-width="2" />
+                    <circle cx="12" cy="10" r="3" fill="currentColor" />
+                </svg>
             </div>
-            <span class="nav-text">Ubicación</span>
+            <span class="nav-text">Mi ubicación</span>
         </div>
 
         <div class="nav-item">
             <div class="nav-icon">
-                <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                <svg viewBox="0 0 24 24">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" />
+                    <circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+                </svg>
             </div>
             <span class="nav-text">Cargador</span>
         </div>
 
         <div class="nav-item">
             <div class="nav-icon">
-                <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" /><path d="M12 3a4 4 0 0 0-4 4v1a4 4 0 0 0 8 0V7a4 4 0 0 0-4-4z" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                <svg viewBox="0 0 24 24">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" />
+                    <path d="M12 3a4 4 0 0 0-4 4v1a4 4 0 0 0 8 0V7a4 4 0 0 0-4-4z" fill="none" stroke="currentColor" stroke-width="2" />
+                </svg>
             </div>
             <span class="nav-text">Cargadora</span>
         </div>
 
         <div class="nav-item">
             <div class="nav-icon">
-                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" /><circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" fill="none" stroke="currentColor" stroke-width="2" /><path d="M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+                <svg viewBox="0 0 24 24">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" />
+                    <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" fill="none" stroke="currentColor" stroke-width="2" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="2" />
+                </svg>
             </div>
             <span class="nav-text">Grupos</span>
         </div>
@@ -271,7 +237,7 @@
     private string? error;
     private bool mapaDibujado;
     private HubConnection? hubConnection;
-    private string estadoTiempoReal = "UBICACIÓN EN VIVO"; // Lo cambié directo para que coincida con tu diseño
+    private string estadoTiempoReal = "UBICACIÓN EN VIVO";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -362,9 +328,7 @@
                 permiso = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
 
             if (permiso != PermissionStatus.Granted)
-            {
                 return;
-            }
 
             var request = new GeolocationRequest(
                 GeolocationAccuracy.Best,
@@ -373,9 +337,7 @@
             var location = await Geolocation.Default.GetLocationAsync(request);
 
             if (location is null)
-            {
                 return;
-            }
 
             await JS.InvokeVoidAsync(
                 "mapaRecorrido.mostrarMiUbicacion",
@@ -383,14 +345,9 @@
                 location.Longitude,
                 true);
         }
-        catch (Exception ex)
+        catch
         {
         }
-    }
-
-    private void Volver()
-    {
-        Navigation.NavigateTo("/recorridos");
     }
 
     public async ValueTask DisposeAsync()

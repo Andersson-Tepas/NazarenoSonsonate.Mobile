@@ -21,17 +21,17 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<MauiIcon Include="Resources\AppIcon\appicon.jpg" Color="White" ForegroundScale="0.65" />
-		<MauiSplashScreen Include="Resources\Splash\splash.jpg" Color="#512BD4" BaseSize="128,128" />
-		<MauiImage Include="Resources\Images\*" />
-		<MauiImage Update="Resources\Images\dotnet_bot.svg" BaseSize="168,208" />
-		<MauiFont Include="Resources\Fonts\*" />
-		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+		<MauiIcon Include="Resources\\AppIcon\\appicon.jpg" Color="White" ForegroundScale="0.65" />
+		<!-- <MauiSplashScreen Include="Resources\\Splash\\splash.jpg" Color="#512BD4" BaseSize="128,128" /> -->
+		<MauiImage Include="Resources\\Images\\*" />
+		<MauiImage Update="Resources\\Images\\dotnet_bot.svg" BaseSize="168,208" />
+		<MauiFont Include="Resources\\Fonts\\*" />
+		<MauiAsset Include="Resources\\Raw\\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <None Remove="Resources\AppIcon\appicon.jpg" />
-	  <None Remove="Resources\Splash\splash.jpg" />
+		<None Remove="Resources\\AppIcon\\appicon.jpg" />
+		<None Remove="Resources\\Splash\\splash.jpg" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -43,7 +43,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\NazarenoSonsonate.Shared\NazarenoSonsonate.Shared.csproj" />
+		<ProjectReference Include="..\\NazarenoSonsonate.Shared\\NazarenoSonsonate.Shared.csproj" />
 	</ItemGroup>
 
 </Project>
