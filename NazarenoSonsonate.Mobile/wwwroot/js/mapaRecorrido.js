@@ -8,6 +8,7 @@
     todosLosPuntos: [],
     filtroActual: "ninguno",
     grupoSeleccionado: null,
+    tipoSeleccionado: null,
 
     esperarGoogleMaps: async function () {
         let intentos = 0;
@@ -29,7 +30,7 @@
         this.map = new google.maps.Map(element, {
             center: { lat: lat, lng: lng },
             zoom: zoom,
-            mapTypeId: 'roadmap',
+            mapTypeId: "roadmap",
             streetViewControl: false,
             fullscreenControl: false,
             mapTypeControl: false
@@ -43,6 +44,7 @@
         this.todosLosPuntos = [];
         this.filtroActual = "ninguno";
         this.grupoSeleccionado = null;
+        this.tipoSeleccionado = null;
     },
 
     drawGeoJson: function (geoJsonText) {
@@ -59,7 +61,7 @@
         this.dataLayer.addGeoJson(data);
 
         this.dataLayer.setStyle({
-            strokeColor: '#6A1B9A',
+            strokeColor: "#6A1B9A",
             strokeWeight: 5,
             fillOpacity: 0
         });
@@ -110,7 +112,8 @@
     },
 
     obtenerGrupoPunto: function (punto, index) {
-        return (punto.Grupo ?? punto.grupo ?? `${index + 1}`).toString().trim();
+        const fallbackIndex = punto?._indiceOriginal ?? index ?? 0;
+        return (punto.Grupo ?? punto.grupo ?? `${fallbackIndex + 1}`).toString().trim();
     },
 
     crearIconoGrupo: function () {
@@ -142,9 +145,14 @@
                 ? JSON.parse(puntosJson)
                 : puntosJson;
 
-            this.todosLosPuntos = Array.isArray(puntos) ? puntos : [];
+            this.todosLosPuntos = (Array.isArray(puntos) ? puntos : []).map((p, index) => ({
+                ...p,
+                _indiceOriginal: index
+            }));
+
             this.filtroActual = "ninguno";
             this.grupoSeleccionado = null;
+            this.tipoSeleccionado = null;
             this.limpiarPuntosRuta();
         } catch (error) {
             console.error("Error al cargar puntos de ruta:", error);
@@ -166,12 +174,13 @@
             return this.todosLosPuntos.filter(p => this.obtenerTipoPunto(p) === "cargadora");
         }
 
-        if (this.filtroActual === "grupo" && this.grupoSeleccionado) {
+        if (this.filtroActual === "grupo-tipo" && this.tipoSeleccionado && this.grupoSeleccionado) {
             const grupoBuscado = this.normalizarTexto(this.grupoSeleccionado);
 
             return this.todosLosPuntos.filter((p, index) => {
                 const grupo = this.obtenerGrupoPunto(p, index);
-                return this.normalizarTexto(grupo) === grupoBuscado;
+                return this.obtenerTipoPunto(p) === this.tipoSeleccionado &&
+                    this.normalizarTexto(grupo) === grupoBuscado;
             });
         }
 
@@ -232,6 +241,7 @@
     ocultarTodosLosPuntos: function () {
         this.filtroActual = "ninguno";
         this.grupoSeleccionado = null;
+        this.tipoSeleccionado = null;
         this.limpiarPuntosRuta();
         return true;
     },
@@ -241,8 +251,10 @@
 
         if (tipoNormalizado === "cargadora") {
             this.filtroActual = "cargadora";
+            this.tipoSeleccionado = "cargadora";
         } else {
             this.filtroActual = "cargador";
+            this.tipoSeleccionado = "cargador";
         }
 
         this.grupoSeleccionado = null;
@@ -250,9 +262,12 @@
         return true;
     },
 
-    obtenerGruposDisponibles: function () {
+    obtenerGruposPorTipo: function (tipo) {
+        const tipoNormalizado = this.normalizarTexto(tipo);
+
         const grupos = [...new Set(
             this.todosLosPuntos
+                .filter(p => this.obtenerTipoPunto(p) === tipoNormalizado)
                 .map((p, index) => this.obtenerGrupoPunto(p, index))
                 .filter(g => g && g.trim() !== "")
         )];
@@ -271,43 +286,14 @@
         return grupos;
     },
 
-    filtrarPorGrupo: function (grupo) {
-        if (!grupo) return false;
+    filtrarPorGrupoYTipo: function (tipo, grupo) {
+        if (!tipo || !grupo) return false;
 
-        this.filtroActual = "grupo";
+        this.filtroActual = "grupo-tipo";
+        this.tipoSeleccionado = this.normalizarTexto(tipo);
         this.grupoSeleccionado = grupo.toString().trim();
         this.redibujarPuntosFiltrados();
         return true;
-    },
-
-    filtrarGrupoInteractivo: function () {
-        const grupos = this.obtenerGruposDisponibles();
-
-        if (grupos.length === 0) {
-            alert("No hay grupos disponibles.");
-            return false;
-        }
-
-        const respuesta = prompt(
-            `Escribe el número del grupo que quieres ver:\n\n${grupos.join(", ")}`,
-            this.grupoSeleccionado || ""
-        );
-
-        if (respuesta === null) return false;
-
-        const grupoIngresado = respuesta.toString().trim();
-        if (!grupoIngresado) return false;
-
-        const grupoEncontrado = grupos.find(g =>
-            this.normalizarTexto(g) === this.normalizarTexto(grupoIngresado)
-        );
-
-        if (!grupoEncontrado) {
-            alert("Ese grupo no existe en este recorrido.");
-            return false;
-        }
-
-        return this.filtrarPorGrupo(grupoEncontrado);
     },
 
     actualizarMarcadorTiempoReal: function (lat, lng, grupoActual, mensaje, fechaHora) {
@@ -318,9 +304,9 @@
         const iconoProcesion = {
             path: google.maps.SymbolPath.CIRCLE,
             scale: 10,
-            fillColor: '#6A1B9A',
+            fillColor: "#6A1B9A",
             fillOpacity: 1,
-            strokeColor: '#ffffff',
+            strokeColor: "#ffffff",
             strokeWeight: 3
         };
 
@@ -328,22 +314,22 @@
             this.marcadorTiempoReal = new google.maps.Marker({
                 position: position,
                 map: this.map,
-                title: grupoActual || 'Procesión',
+                title: grupoActual || "Procesión",
                 icon: iconoProcesion
             });
 
-            this.marcadorTiempoReal.addListener('click', () => {
+            this.marcadorTiempoReal.addListener("click", () => {
                 this.infoTiempoReal.open(this.map, this.marcadorTiempoReal);
             });
         } else {
             this.marcadorTiempoReal.setPosition(position);
-            this.marcadorTiempoReal.setTitle(grupoActual || 'Procesión');
+            this.marcadorTiempoReal.setTitle(grupoActual || "Procesión");
             this.marcadorTiempoReal.setIcon(iconoProcesion);
         }
 
         this.infoTiempoReal.setContent(`<div>
-            <strong>${grupoActual || 'Procesión'}</strong><br/>
-            ${mensaje || ''}
+            <strong>${grupoActual || "Procesión"}</strong><br/>
+            ${mensaje || ""}
         </div>`);
     },
 
@@ -355,9 +341,9 @@
         const iconoUsuario = {
             path: google.maps.SymbolPath.CIRCLE,
             scale: 9,
-            fillColor: '#1E88E5',
+            fillColor: "#1E88E5",
             fillOpacity: 1,
-            strokeColor: '#ffffff',
+            strokeColor: "#ffffff",
             strokeWeight: 3
         };
 
@@ -365,7 +351,7 @@
             this.marcadorUsuario = new google.maps.Marker({
                 position: position,
                 map: this.map,
-                title: 'Mi ubicación',
+                title: "Mi ubicación",
                 icon: iconoUsuario,
                 zIndex: 1000
             });

@@ -89,6 +89,81 @@
         border: 1px solid rgba(252, 239, 214, 0.2);
     }
 
+    .selector-grupo-bar {
+        background: #f3f0eb;
+        color: #1b1b1b;
+        margin: 0 14px 10px 14px;
+        border-radius: 18px;
+        padding: 16px 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.20);
+        z-index: 15;
+        cursor: pointer;
+    }
+
+    .selector-grupo-label {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+        .selector-grupo-label svg {
+            width: 20px;
+            height: 20px;
+            stroke: #111;
+            fill: none;
+            stroke-width: 2;
+        }
+
+    .selector-grupo-valor {
+        font-size: 16px;
+        font-weight: 700;
+    }
+
+    .grupo-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.45);
+        z-index: 2000;
+        display: flex;
+        align-items: flex-end;
+    }
+
+    .grupo-modal {
+        width: 100%;
+        max-height: 82vh;
+        background: #f7f7f7;
+        border-radius: 24px 24px 0 0;
+        overflow-y: auto;
+        padding: 14px 0 30px 0;
+    }
+
+    .grupo-modal-handle {
+        width: 52px;
+        height: 5px;
+        border-radius: 999px;
+        background: #c9c9c9;
+        margin: 0 auto 12px auto;
+    }
+
+    .grupo-item {
+        padding: 20px 26px;
+        font-size: 22px;
+        color: #111;
+        border-bottom: 1px solid #e8e8e8;
+        cursor: pointer;
+    }
+
+        .grupo-item.selected {
+            background: #efe6f7;
+            color: #6A1B9A;
+            font-weight: 700;
+        }
+
     .bottom-nav {
         background-color: #170318;
         display: flex;
@@ -127,7 +202,9 @@
         .nav-icon svg {
             width: 22px;
             height: 22px;
-            fill: currentColor;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
         }
 
     .nav-text {
@@ -150,7 +227,6 @@
     </header>
 
     <div class="map-view">
-
         @if (cargando)
         {
             <div class="status-overlay">Cargando recorrido...</div>
@@ -173,12 +249,47 @@
         }
     </div>
 
+    @if (filtroActivo == "grupo" && !string.IsNullOrWhiteSpace(tipoSelectorGrupo))
+    {
+        <div class="selector-grupo-bar" @onclick="AbrirSelectorGrupo">
+            <div class="selector-grupo-label">
+                <svg viewBox="0 0 24 24">
+                    <path d="M3 5h18l-7 8v5l-4 2v-7z"></path>
+                </svg>
+                <span>
+                    Seleccionar número de @(tipoSelectorGrupo == "cargadora" ? "cargadora" : "cargador")
+                </span>
+            </div>
+
+            <div class="selector-grupo-valor">
+                @(string.IsNullOrWhiteSpace(grupoSeleccionadoActual) ? "Seleccionar" : grupoSeleccionadoActual)
+            </div>
+        </div>
+    }
+
+    @if (mostrarSelectorGrupo)
+    {
+        <div class="grupo-modal-backdrop" @onclick="CerrarSelectorGrupo">
+            <div class="grupo-modal" @onclick:stopPropagation="true">
+                <div class="grupo-modal-handle"></div>
+
+                @foreach (var grupo in gruposDisponibles)
+                {
+                    <div class="grupo-item @(grupo == grupoSeleccionadoActual ? "selected" : "")"
+                         @onclick="() => SeleccionarGrupo(grupo)">
+                        @grupo
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
     <nav class="bottom-nav">
-        <div class="nav-item @(string.IsNullOrWhiteSpace(filtroActivo) ? "active" : "")" @onclick="MostrarProcesion">
+        <div class="nav-item @(string.IsNullOrWhiteSpace(filtroActivo) && string.IsNullOrWhiteSpace(tipoSelectorGrupo) ? "active" : "")" @onclick="MostrarProcesion">
             <div class="nav-icon">
                 <svg viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
-                    <circle cx="12" cy="12" r="4" fill="currentColor" />
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"></circle>
                 </svg>
             </div>
             <span class="nav-text">Procesión</span>
@@ -187,28 +298,28 @@
         <div class="nav-item" @onclick="MostrarMiUbicacion">
             <div class="nav-icon">
                 <svg viewBox="0 0 24 24">
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="none" stroke="currentColor" stroke-width="2" />
-                    <circle cx="12" cy="10" r="3" fill="currentColor" />
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                    <circle cx="12" cy="10" r="3" fill="currentColor" stroke="none"></circle>
                 </svg>
             </div>
             <span class="nav-text">Mi ubicación</span>
         </div>
 
-        <div class="nav-item @(filtroActivo == "cargador" ? "active" : "")" @onclick="FiltrarCargadores">
+        <div class="nav-item @(tipoSelectorGrupo == "cargador" ? "active" : "")" @onclick="FiltrarCargadores">
             <div class="nav-icon">
                 <svg viewBox="0 0 24 24">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" />
-                    <circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
                 </svg>
             </div>
             <span class="nav-text">Cargador</span>
         </div>
 
-        <div class="nav-item @(filtroActivo == "cargadora" ? "active" : "")" @onclick="FiltrarCargadoras">
+        <div class="nav-item @(tipoSelectorGrupo == "cargadora" ? "active" : "")" @onclick="FiltrarCargadoras">
             <div class="nav-icon">
                 <svg viewBox="0 0 24 24">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" />
-                    <path d="M12 3a4 4 0 0 0-4 4v1a4 4 0 0 0 8 0V7a4 4 0 0 0-4-4z" fill="none" stroke="currentColor" stroke-width="2" />
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <path d="M12 3a4 4 0 0 0-4 4v1a4 4 0 0 0 8 0V7a4 4 0 0 0-4-4z"></path>
                 </svg>
             </div>
             <span class="nav-text">Cargadora</span>
@@ -217,10 +328,7 @@
         <div class="nav-item @(filtroActivo == "grupo" ? "active" : "")" @onclick="FiltrarGrupo">
             <div class="nav-icon">
                 <svg viewBox="0 0 24 24">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="2" />
-                    <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" fill="none" stroke="currentColor" stroke-width="2" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="2" />
+                    <path d="M3 5h18l-7 8v5l-4 2v-7z"></path>
                 </svg>
             </div>
             <span class="nav-text">Grupos</span>
@@ -240,6 +348,10 @@
     private HubConnection? hubConnection;
     private string estadoTiempoReal = "UBICACIÓN EN VIVO";
     private string filtroActivo = "";
+    private bool mostrarSelectorGrupo;
+    private List<string> gruposDisponibles = new();
+    private string? grupoSeleccionadoActual;
+    private string tipoSelectorGrupo = "";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -250,6 +362,10 @@
             mapaDibujado = false;
             estadoTiempoReal = "UBICACIÓN EN VIVO";
             filtroActivo = "";
+            mostrarSelectorGrupo = false;
+            gruposDisponibles = new();
+            grupoSeleccionadoActual = null;
+            tipoSelectorGrupo = "";
 
             if (hubConnection is not null)
             {
@@ -292,33 +408,75 @@
     private async Task MostrarProcesion()
     {
         await JS.InvokeVoidAsync("mapaRecorrido.ocultarTodosLosPuntos");
+
         filtroActivo = "";
+        tipoSelectorGrupo = "";
+        grupoSeleccionadoActual = null;
+        gruposDisponibles.Clear();
+        mostrarSelectorGrupo = false;
+
         StateHasChanged();
     }
 
     private async Task FiltrarCargadores()
     {
-        await JS.InvokeVoidAsync("mapaRecorrido.filtrarPorTipo", "cargador");
+        tipoSelectorGrupo = "cargador";
         filtroActivo = "cargador";
+        grupoSeleccionadoActual = null;
+        mostrarSelectorGrupo = false;
+
+        await JS.InvokeVoidAsync("mapaRecorrido.filtrarPorTipo", "cargador");
+
         StateHasChanged();
     }
 
     private async Task FiltrarCargadoras()
     {
-        await JS.InvokeVoidAsync("mapaRecorrido.filtrarPorTipo", "cargadora");
+        tipoSelectorGrupo = "cargadora";
         filtroActivo = "cargadora";
+        grupoSeleccionadoActual = null;
+        mostrarSelectorGrupo = false;
+
+        await JS.InvokeVoidAsync("mapaRecorrido.filtrarPorTipo", "cargadora");
+
         StateHasChanged();
     }
 
     private async Task FiltrarGrupo()
     {
-        var aplicado = await JS.InvokeAsync<bool>("mapaRecorrido.filtrarGrupoInteractivo");
+        if (string.IsNullOrWhiteSpace(tipoSelectorGrupo))
+            return;
 
-        if (aplicado)
-        {
-            filtroActivo = "grupo";
-            StateHasChanged();
-        }
+        filtroActivo = "grupo";
+        await AbrirSelectorGrupo();
+    }
+
+    private async Task AbrirSelectorGrupo()
+    {
+        if (string.IsNullOrWhiteSpace(tipoSelectorGrupo))
+            return;
+
+        var grupos = await JS.InvokeAsync<string[]>("mapaRecorrido.obtenerGruposPorTipo", tipoSelectorGrupo);
+        gruposDisponibles = new List<string>(grupos ?? Array.Empty<string>());
+        mostrarSelectorGrupo = true;
+        StateHasChanged();
+    }
+
+    private void CerrarSelectorGrupo()
+    {
+        mostrarSelectorGrupo = false;
+        StateHasChanged();
+    }
+
+    private async Task SeleccionarGrupo(string grupo)
+    {
+        grupoSeleccionadoActual = grupo;
+        mostrarSelectorGrupo = false;
+        filtroActivo = "grupo";
+
+        await JS.InvokeVoidAsync("mapaRecorrido.filtrarPorGrupoYTipo", tipoSelectorGrupo, grupo);
+
+        StateHasChanged();
     }
 
     private async Task IniciarTiempoReal()
