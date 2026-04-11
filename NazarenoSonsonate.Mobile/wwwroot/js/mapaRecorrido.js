@@ -4,6 +4,7 @@
     marcadorTiempoReal: null,
     marcadorUsuario: null,
     infoTiempoReal: null,
+    puntoMarkers: [],
 
     esperarGoogleMaps: async function () {
         let intentos = 0;
@@ -35,6 +36,7 @@
         this.marcadorTiempoReal = null;
         this.marcadorUsuario = null;
         this.infoTiempoReal = new google.maps.InfoWindow();
+        this.puntoMarkers = [];
     },
 
     drawGeoJson: function (geoJsonText) {
@@ -44,7 +46,10 @@
             this.dataLayer.remove(feature);
         });
 
-        const data = JSON.parse(geoJsonText);
+        const data = typeof geoJsonText === "string"
+            ? JSON.parse(geoJsonText)
+            : geoJsonText;
+
         this.dataLayer.addGeoJson(data);
 
         this.dataLayer.setStyle({
@@ -81,6 +86,91 @@
         const array = geometry.getArray ? geometry.getArray() : [];
         for (let i = 0; i < array.length; i++) {
             this.procesarGeometria(array[i], bounds);
+        }
+    },
+
+    crearIconoGrupo: function () {
+        const svg = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">
+                <circle cx="15" cy="15" r="11.5" fill="#7B1FA2" stroke="#F3E5F5" stroke-width="2"/>
+            </svg>
+        `;
+
+        return {
+            url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg),
+            scaledSize: new google.maps.Size(30, 30),
+            size: new google.maps.Size(30, 30),
+            anchor: new google.maps.Point(15, 15),
+            labelOrigin: new google.maps.Point(15, 15)
+        };
+    },
+
+    limpiarPuntosRuta: function () {
+        this.puntoMarkers.forEach(marker => marker.setMap(null));
+        this.puntoMarkers = [];
+    },
+
+    drawPuntosRuta: function (puntosJson) {
+        if (!this.map || !puntosJson) return;
+
+        this.limpiarPuntosRuta();
+
+        try {
+            const puntos = typeof puntosJson === "string"
+                ? JSON.parse(puntosJson)
+                : puntosJson;
+
+            if (!Array.isArray(puntos)) return;
+
+            const bounds = new google.maps.LatLngBounds();
+            const iconoGrupo = this.crearIconoGrupo();
+
+            puntos.forEach((punto, index) => {
+                const lat = punto.Latitud ?? punto.latitud;
+                const lng = punto.Longitud ?? punto.longitud;
+                const grupo = (punto.Grupo ?? punto.grupo ?? `${index + 1}`).toString().trim();
+                const referencia = punto.Referencia ?? punto.referencia ?? "";
+
+                if (lat == null || lng == null) return;
+
+                const marker = new google.maps.Marker({
+                    position: { lat: lat, lng: lng },
+                    map: this.map,
+                    icon: iconoGrupo,
+                    title: grupo || referencia || `Punto ${index + 1}`,
+                    label: {
+                        text: grupo,
+                        color: "#FFFFFF",
+                        fontSize: "10px",
+                        fontWeight: "700"
+                    },
+                    zIndex: 900
+                });
+
+                const contenido = `
+                    <div style="min-width:150px">
+                        <strong>Grupo: ${grupo || "Sin definir"}</strong>
+                        ${referencia ? `<br/>Referencia: ${referencia}` : ""}
+                    </div>
+                `;
+
+                const info = new google.maps.InfoWindow({
+                    content: contenido
+                });
+
+                marker.addListener("click", () => {
+                    info.open(this.map, marker);
+                });
+
+                this.puntoMarkers.push(marker);
+                bounds.extend(marker.getPosition());
+            });
+
+            if (!bounds.isEmpty()) {
+                this.map.fitBounds(bounds);
+            }
+        } catch (error) {
+            console.error("Error al dibujar puntos de ruta:", error);
         }
     },
 

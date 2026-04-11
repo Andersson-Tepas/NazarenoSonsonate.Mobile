@@ -26,7 +26,7 @@
         this.map = new google.maps.Map(element, {
             center: { lat: lat, lng: lng },
             zoom: zoom,
-            mapTypeId: 'roadmap',
+            mapTypeId: "roadmap",
             streetViewControl: false,
             fullscreenControl: false,
             mapTypeControl: false
@@ -35,9 +35,9 @@
         this.polyline = new google.maps.Polyline({
             map: this.map,
             path: [],
-            strokeColor: '#6A1B9A',
+            strokeColor: "#8E24AA",
             strokeOpacity: 1,
-            strokeWeight: 4,
+            strokeWeight: 5,
             editable: true
         });
 
@@ -58,7 +58,7 @@
             if (!event.latLng) return;
 
             if (this.modoCheckpoint) {
-                const referencia = prompt("Referencia del checkpoint:", "");
+                const referencia = prompt("Referencia del punto:", "");
                 if (referencia === null) {
                     this.modoCheckpoint = false;
                     return;
@@ -151,7 +151,7 @@
 
             this.redibujarCheckpoints();
         } catch (e) {
-            console.error("Error cargando checkpoints:", e);
+            console.error("Error cargando puntos:", e);
         }
     },
 
@@ -183,35 +183,52 @@
         }
     },
 
+    crearIconoGrupo: function () {
+        const svg = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">
+                <circle cx="15" cy="15" r="11.5" fill="#7B1FA2" stroke="#F3E5F5" stroke-width="2"/>
+            </svg>
+        `;
+
+        return {
+            url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg),
+            scaledSize: new google.maps.Size(30, 30),
+            size: new google.maps.Size(30, 30),
+            anchor: new google.maps.Point(15, 15),
+            labelOrigin: new google.maps.Point(15, 15)
+        };
+    },
+
     redibujarCheckpoints: function () {
         this.checkpointMarkers.forEach(m => m.setMap(null));
         this.checkpointMarkers = [];
 
-        const purplePin = {
-            path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z",
-            fillColor: "#6A1B9A",
-            fillOpacity: 1,
-            strokeColor: "#ffffff",
-            strokeWeight: 2,
-            scale: 2,
-            anchor: new google.maps.Point(12, 22)
-        };
+        const iconoGrupo = this.crearIconoGrupo();
 
         this.checkpoints.forEach((punto, index) => {
             punto.Orden = index + 1;
+
+            const textoGrupo = (punto.Grupo || `${index + 1}`).toString().trim();
 
             const marker = new google.maps.Marker({
                 position: { lat: punto.Latitud, lng: punto.Longitud },
                 map: this.map,
                 draggable: true,
-                title: punto.Grupo || punto.Referencia || `Checkpoint ${index + 1}`,
-                icon: purplePin
+                title: punto.Grupo || punto.Referencia || `Punto ${index + 1}`,
+                icon: iconoGrupo,
+                label: {
+                    text: textoGrupo,
+                    color: "#FFFFFF",
+                    fontSize: "10px",
+                    fontWeight: "700"
+                },
+                zIndex: 1000
             });
 
             const construirContenido = () => `
-                <div>
-                    <strong>${punto.Grupo || "Grupo sin definir"}</strong>
-                    ${punto.Referencia ? `<br/>${punto.Referencia}` : ""}
+                <div style="min-width:160px">
+                    <strong>Grupo: ${punto.Grupo || "Sin definir"}</strong>
+                    ${punto.Referencia ? `<br/>Referencia: ${punto.Referencia}` : ""}
                 </div>`;
 
             const info = new google.maps.InfoWindow({
@@ -227,8 +244,20 @@
 
                 punto.Referencia = nuevaReferencia;
                 punto.Grupo = nuevoGrupo;
-                marker.setTitle(punto.Grupo || punto.Referencia || `Checkpoint ${index + 1}`);
+
+                marker.setLabel({
+                    text: (punto.Grupo || `${index + 1}`).toString().trim(),
+                    color: "#FFFFFF",
+                    fontSize: "10px",
+                    fontWeight: "700"
+                });
+
+                marker.setTitle(punto.Grupo || punto.Referencia || `Punto ${index + 1}`);
                 info.setContent(construirContenido());
+            });
+
+            marker.addListener("dblclick", () => {
+                info.open(this.map, marker);
             });
 
             marker.addListener("dragend", (event) => {

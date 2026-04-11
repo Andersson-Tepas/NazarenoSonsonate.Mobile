@@ -7,26 +7,25 @@
 @inject NavigationManager Navigation
 
 <style>
-    /* FORZAMOS PANTALLA COMPLETA IGNORANDO EL MAINLAYOUT */
     .editor-container {
         position: fixed;
         top: 0;
         left: 0;
         width: 100vw;
         height: 100vh;
-        background-color: #120516; /* Tu morado oscuro */
+        background-color: #120516;
         display: flex;
         flex-direction: column;
         gap: 15px;
         z-index: 1000;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         padding: 20px 15px;
-        overflow-y: auto; /* IMPORTANTE: Para que puedas bajar si no cabe todo */
-        box-sizing: border-box; /* Para que el padding no desborde la pantalla */
+        overflow-y: auto;
+        box-sizing: border-box;
     }
-    /* FONDO PRINCIPAL */
+
     .editor-container {
-        background-color: #120516; /* Morado súper oscuro */
+        background-color: #120516;
         min-height: 100vh;
         color: white;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -36,7 +35,6 @@
         gap: 15px;
     }
 
-    /* HEADER */
     .top-header {
         display: flex;
         justify-content: space-between;
@@ -59,7 +57,6 @@
         margin: 0;
     }
 
-    /* TARJETA DE INFORMACIÓN */
     .info-card {
         background-color: #211029;
         border-radius: 16px;
@@ -105,20 +102,16 @@
         font-weight: 600;
     }
 
-    /* CONTENEDOR DEL MAPA (Google Maps) */
     .map-container {
         border-radius: 16px;
         width: 100%;
-        /* LA SOLUCIÓN: */
-        flex-grow: 1; /* Se expande para llenar el espacio disponible */
-        min-height: 350px; /* NUNCA será más pequeño que esto */
-
+        flex-grow: 1;
+        min-height: 350px;
         border: 2px solid #381c47;
         overflow: hidden;
         box-shadow: 0 4px 15px rgba(0,0,0,0.4);
     }
 
-    /* CUADRÍCULA DE BOTONES DE ACCIÓN */
     .action-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -161,7 +154,6 @@
         color: #e5ccb3;
     }
 
-    /* BOTÓN PRINCIPAL DE GUARDAR */
     .btn-save {
         background-color: #ffb703;
         color: #452100;
@@ -181,7 +173,6 @@
         cursor: pointer;
     }
 
-    /* FOOTER Y MENSAJES */
     .footer-close {
         text-align: center;
         color: #9d7c8e;
@@ -275,7 +266,7 @@
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm-1 5h2v2h2v2h-2v2h-2v-2H9v-2h2V7z" />
                 </svg>
-                Agregar Checkpoint
+                Agregar chibolita
             </button>
 
             <button class="btn-action bg-dark-purple" @onclick="DeshacerUltimoPunto">
@@ -297,7 +288,7 @@
                     <path d="M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
                     <line x1="4" y1="4" x2="20" y2="20" stroke="#cbb4d6" stroke-width="2" />
                 </svg>
-                Limpiar Checkpoints
+                Limpiar chibolitas
             </button>
         </div>
 
@@ -312,7 +303,7 @@
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z" />
             </svg>
-            Guardar ruta y checkpoints
+            Guardar ruta y puntos
         </button>
 
         <div class="footer-close" @onclick="VolverARecorridos">
@@ -376,7 +367,7 @@
     private async Task ActivarCheckpoint()
     {
         await JS.InvokeVoidAsync("mapaRecorridoAdmin.activarModoCheckpoint");
-        mensaje = "Toca el mapa para agregar el checkpoint.";
+        mensaje = "Toca el mapa para agregar la chibolita.";
     }
 
     private async Task DeshacerUltimoPunto()
@@ -419,7 +410,7 @@
             }
 
             await RecorridoService.GuardarMapaAsync(Id, dto);
-            mensaje = "Ruta y checkpoints guardados correctamente.";
+            mensaje = "Ruta y puntos guardados correctamente.";
         }
         catch (Exception ex)
         {
