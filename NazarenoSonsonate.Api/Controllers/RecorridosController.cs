@@ -77,11 +77,7 @@ namespace NazarenoSonsonate.Api.Controllers
             recorrido.RutaGeoJson = request.RutaGeoJson;
             recorrido.PuntosRuta = request.PuntosRuta ?? new List<PuntoRutaDto>();
 
-            for (int i = 0; i < recorrido.PuntosRuta.Count; i++)
-            {
-                recorrido.PuntosRuta[i].RecorridoId = id;
-                recorrido.PuntosRuta[i].Orden = i + 1;
-            }
+            NormalizarPuntos(recorrido.PuntosRuta, id);
 
             GuardarRecorridos(recorridos);
 
@@ -107,8 +103,16 @@ namespace NazarenoSonsonate.Api.Controllers
                     PropertyNameCaseInsensitive = true
                 };
 
-                return JsonSerializer.Deserialize<List<RecorridoDto>>(json, options)
-                       ?? ObtenerRecorridosIniciales();
+                var recorridos = JsonSerializer.Deserialize<List<RecorridoDto>>(json, options)
+                                ?? ObtenerRecorridosIniciales();
+
+                foreach (var recorrido in recorridos)
+                {
+                    recorrido.PuntosRuta ??= new List<PuntoRutaDto>();
+                    NormalizarPuntos(recorrido.PuntosRuta, recorrido.Id);
+                }
+
+                return recorridos;
             }
         }
 
@@ -127,6 +131,29 @@ namespace NazarenoSonsonate.Api.Controllers
                 using var writer = new StreamWriter(stream);
                 writer.Write(json);
             }
+        }
+
+        private static void NormalizarPuntos(List<PuntoRutaDto> puntos, int recorridoId)
+        {
+            for (int i = 0; i < puntos.Count; i++)
+            {
+                puntos[i].RecorridoId = recorridoId;
+                puntos[i].Orden = i + 1;
+                puntos[i].Tipo = NormalizarTipo(puntos[i].Tipo);
+            }
+        }
+
+        private static string NormalizarTipo(string? tipo)
+        {
+            var valor = (tipo ?? string.Empty).Trim().ToLowerInvariant();
+
+            if (valor.Contains("cargadora"))
+                return "Cargadora";
+
+            if (valor.Contains("cargador"))
+                return "Cargador";
+
+            return "Cargador";
         }
 
         private static List<RecorridoDto> ObtenerRecorridosIniciales()

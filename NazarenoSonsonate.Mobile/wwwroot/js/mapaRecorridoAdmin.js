@@ -19,6 +19,15 @@
         }
     },
 
+    normalizarTipo: function (tipo) {
+        const valor = (tipo || "").toString().trim().toLowerCase();
+
+        if (valor.includes("cargadora")) return "Cargadora";
+        if (valor.includes("cargador")) return "Cargador";
+
+        return "Cargador";
+    },
+
     init: function (elementId, lat, lng, zoom, geoJsonText, checkpointsJson) {
         const element = document.getElementById(elementId);
         if (!element) return;
@@ -70,6 +79,12 @@
                     return;
                 }
 
+                const tipoIngresado = prompt("Tipo del punto (Cargador/Cargadora):", "Cargador");
+                if (tipoIngresado === null) {
+                    this.modoCheckpoint = false;
+                    return;
+                }
+
                 this.checkpoints.push({
                     Id: 0,
                     RecorridoId: 0,
@@ -77,7 +92,8 @@
                     Longitud: event.latLng.lng(),
                     Orden: this.checkpoints.length + 1,
                     Referencia: referencia,
-                    Grupo: grupo
+                    Grupo: grupo,
+                    Tipo: this.normalizarTipo(tipoIngresado)
                 });
 
                 this.redibujarCheckpoints();
@@ -145,7 +161,8 @@
                     Longitud: p.Longitud ?? p.longitud ?? 0,
                     Orden: p.Orden ?? p.orden ?? 0,
                     Referencia: p.Referencia ?? p.referencia ?? "",
-                    Grupo: p.Grupo ?? p.grupo ?? ""
+                    Grupo: p.Grupo ?? p.grupo ?? "",
+                    Tipo: this.normalizarTipo(p.Tipo ?? p.tipo ?? "Cargador")
                 }))
                 : [];
 
@@ -207,6 +224,7 @@
 
         this.checkpoints.forEach((punto, index) => {
             punto.Orden = index + 1;
+            punto.Tipo = this.normalizarTipo(punto.Tipo);
 
             const textoGrupo = (punto.Grupo || `${index + 1}`).toString().trim();
 
@@ -214,7 +232,7 @@
                 position: { lat: punto.Latitud, lng: punto.Longitud },
                 map: this.map,
                 draggable: true,
-                title: punto.Grupo || punto.Referencia || `Punto ${index + 1}`,
+                title: `${punto.Tipo} ${punto.Grupo || punto.Referencia || `Punto ${index + 1}`}`,
                 icon: iconoGrupo,
                 label: {
                     text: textoGrupo,
@@ -226,8 +244,9 @@
             });
 
             const construirContenido = () => `
-                <div style="min-width:160px">
+                <div style="min-width:170px">
                     <strong>Grupo: ${punto.Grupo || "Sin definir"}</strong>
+                    <br/>Tipo: ${punto.Tipo || "Cargador"}
                     ${punto.Referencia ? `<br/>Referencia: ${punto.Referencia}` : ""}
                 </div>`;
 
@@ -242,8 +261,12 @@
                 const nuevoGrupo = prompt("Editar grupo:", punto.Grupo || "");
                 if (nuevoGrupo === null) return;
 
+                const nuevoTipo = prompt("Editar tipo (Cargador/Cargadora):", punto.Tipo || "Cargador");
+                if (nuevoTipo === null) return;
+
                 punto.Referencia = nuevaReferencia;
                 punto.Grupo = nuevoGrupo;
+                punto.Tipo = this.normalizarTipo(nuevoTipo);
 
                 marker.setLabel({
                     text: (punto.Grupo || `${index + 1}`).toString().trim(),
@@ -252,7 +275,7 @@
                     fontWeight: "700"
                 });
 
-                marker.setTitle(punto.Grupo || punto.Referencia || `Punto ${index + 1}`);
+                marker.setTitle(`${punto.Tipo} ${punto.Grupo || punto.Referencia || `Punto ${index + 1}`}`);
                 info.setContent(construirContenido());
             });
 
@@ -331,7 +354,8 @@
             Longitud: p.Longitud,
             Orden: index + 1,
             Referencia: p.Referencia || "",
-            Grupo: p.Grupo || ""
+            Grupo: p.Grupo || "",
+            Tipo: this.normalizarTipo(p.Tipo || "Cargador")
         }));
     }
 };

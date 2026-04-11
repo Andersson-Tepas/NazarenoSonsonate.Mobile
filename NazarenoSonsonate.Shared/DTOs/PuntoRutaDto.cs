@@ -15,5 +15,6 @@ namespace NazarenoSonsonate.Shared.DTOs
         public int Orden { get; set; }
         public string? Referencia { get; set; }
         public string? Grupo { get; set; }
+        public string? Tipo { get; set; } // Cargador / Cargadora
     }
 }

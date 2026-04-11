@@ -5,6 +5,9 @@
     marcadorUsuario: null,
     infoTiempoReal: null,
     puntoMarkers: [],
+    todosLosPuntos: [],
+    filtroActual: "ninguno",
+    grupoSeleccionado: null,
 
     esperarGoogleMaps: async function () {
         let intentos = 0;
@@ -37,6 +40,9 @@
         this.marcadorUsuario = null;
         this.infoTiempoReal = new google.maps.InfoWindow();
         this.puntoMarkers = [];
+        this.todosLosPuntos = [];
+        this.filtroActual = "ninguno";
+        this.grupoSeleccionado = null;
     },
 
     drawGeoJson: function (geoJsonText) {
@@ -89,6 +95,24 @@
         }
     },
 
+    normalizarTexto: function (valor) {
+        return (valor || "").toString().trim().toLowerCase();
+    },
+
+    obtenerTipoPunto: function (punto) {
+        const tipoOriginal = punto.Tipo ?? punto.tipo ?? "";
+        const tipo = this.normalizarTexto(tipoOriginal);
+
+        if (tipo.includes("cargadora")) return "cargadora";
+        if (tipo.includes("cargador")) return "cargador";
+
+        return "";
+    },
+
+    obtenerGrupoPunto: function (punto, index) {
+        return (punto.Grupo ?? punto.grupo ?? `${index + 1}`).toString().trim();
+    },
+
     crearIconoGrupo: function () {
         const svg = `
             <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">
@@ -111,67 +135,179 @@
     },
 
     drawPuntosRuta: function (puntosJson) {
-        if (!this.map || !puntosJson) return;
-
-        this.limpiarPuntosRuta();
+        if (!this.map) return;
 
         try {
             const puntos = typeof puntosJson === "string"
                 ? JSON.parse(puntosJson)
                 : puntosJson;
 
-            if (!Array.isArray(puntos)) return;
+            this.todosLosPuntos = Array.isArray(puntos) ? puntos : [];
+            this.filtroActual = "ninguno";
+            this.grupoSeleccionado = null;
+            this.limpiarPuntosRuta();
+        } catch (error) {
+            console.error("Error al cargar puntos de ruta:", error);
+        }
+    },
 
-            const bounds = new google.maps.LatLngBounds();
-            const iconoGrupo = this.crearIconoGrupo();
+    obtenerPuntosFiltrados: function () {
+        if (!Array.isArray(this.todosLosPuntos)) return [];
 
-            puntos.forEach((punto, index) => {
-                const lat = punto.Latitud ?? punto.latitud;
-                const lng = punto.Longitud ?? punto.longitud;
-                const grupo = (punto.Grupo ?? punto.grupo ?? `${index + 1}`).toString().trim();
-                const referencia = punto.Referencia ?? punto.referencia ?? "";
+        if (this.filtroActual === "ninguno") {
+            return [];
+        }
 
-                if (lat == null || lng == null) return;
+        if (this.filtroActual === "cargador") {
+            return this.todosLosPuntos.filter(p => this.obtenerTipoPunto(p) === "cargador");
+        }
 
-                const marker = new google.maps.Marker({
-                    position: { lat: lat, lng: lng },
-                    map: this.map,
-                    icon: iconoGrupo,
-                    title: grupo || referencia || `Punto ${index + 1}`,
-                    label: {
-                        text: grupo,
-                        color: "#FFFFFF",
-                        fontSize: "10px",
-                        fontWeight: "700"
-                    },
-                    zIndex: 900
-                });
+        if (this.filtroActual === "cargadora") {
+            return this.todosLosPuntos.filter(p => this.obtenerTipoPunto(p) === "cargadora");
+        }
 
-                const contenido = `
-                    <div style="min-width:150px">
-                        <strong>Grupo: ${grupo || "Sin definir"}</strong>
-                        ${referencia ? `<br/>Referencia: ${referencia}` : ""}
-                    </div>
-                `;
+        if (this.filtroActual === "grupo" && this.grupoSeleccionado) {
+            const grupoBuscado = this.normalizarTexto(this.grupoSeleccionado);
 
-                const info = new google.maps.InfoWindow({
-                    content: contenido
-                });
+            return this.todosLosPuntos.filter((p, index) => {
+                const grupo = this.obtenerGrupoPunto(p, index);
+                return this.normalizarTexto(grupo) === grupoBuscado;
+            });
+        }
 
-                marker.addListener("click", () => {
-                    info.open(this.map, marker);
-                });
+        return [];
+    },
 
-                this.puntoMarkers.push(marker);
-                bounds.extend(marker.getPosition());
+    redibujarPuntosFiltrados: function () {
+        if (!this.map) return;
+
+        this.limpiarPuntosRuta();
+
+        const puntos = this.obtenerPuntosFiltrados();
+        const iconoGrupo = this.crearIconoGrupo();
+
+        puntos.forEach((punto, index) => {
+            const lat = punto.Latitud ?? punto.latitud;
+            const lng = punto.Longitud ?? punto.longitud;
+            const grupo = this.obtenerGrupoPunto(punto, index);
+            const referencia = punto.Referencia ?? punto.referencia ?? "";
+            const tipo = this.obtenerTipoPunto(punto);
+
+            if (lat == null || lng == null) return;
+
+            const marker = new google.maps.Marker({
+                position: { lat: lat, lng: lng },
+                map: this.map,
+                icon: iconoGrupo,
+                title: `${tipo === "cargadora" ? "Cargadora" : tipo === "cargador" ? "Cargador" : "Grupo"} ${grupo}`,
+                label: {
+                    text: grupo,
+                    color: "#FFFFFF",
+                    fontSize: "10px",
+                    fontWeight: "700"
+                },
+                zIndex: 900
             });
 
-            if (!bounds.isEmpty()) {
-                this.map.fitBounds(bounds);
-            }
-        } catch (error) {
-            console.error("Error al dibujar puntos de ruta:", error);
+            const contenido = `
+                <div style="min-width:150px">
+                    <strong>Grupo: ${grupo || "Sin definir"}</strong>
+                    ${tipo ? `<br/>Tipo: ${tipo === "cargadora" ? "Cargadora" : "Cargador"}` : ""}
+                    ${referencia ? `<br/>Referencia: ${referencia}` : ""}
+                </div>
+            `;
+
+            const info = new google.maps.InfoWindow({
+                content: contenido
+            });
+
+            marker.addListener("click", () => {
+                info.open(this.map, marker);
+            });
+
+            this.puntoMarkers.push(marker);
+        });
+    },
+
+    ocultarTodosLosPuntos: function () {
+        this.filtroActual = "ninguno";
+        this.grupoSeleccionado = null;
+        this.limpiarPuntosRuta();
+        return true;
+    },
+
+    filtrarPorTipo: function (tipo) {
+        const tipoNormalizado = this.normalizarTexto(tipo);
+
+        if (tipoNormalizado === "cargadora") {
+            this.filtroActual = "cargadora";
+        } else {
+            this.filtroActual = "cargador";
         }
+
+        this.grupoSeleccionado = null;
+        this.redibujarPuntosFiltrados();
+        return true;
+    },
+
+    obtenerGruposDisponibles: function () {
+        const grupos = [...new Set(
+            this.todosLosPuntos
+                .map((p, index) => this.obtenerGrupoPunto(p, index))
+                .filter(g => g && g.trim() !== "")
+        )];
+
+        grupos.sort((a, b) => {
+            const na = parseInt(a, 10);
+            const nb = parseInt(b, 10);
+
+            if (!isNaN(na) && !isNaN(nb)) {
+                return na - nb;
+            }
+
+            return a.localeCompare(b);
+        });
+
+        return grupos;
+    },
+
+    filtrarPorGrupo: function (grupo) {
+        if (!grupo) return false;
+
+        this.filtroActual = "grupo";
+        this.grupoSeleccionado = grupo.toString().trim();
+        this.redibujarPuntosFiltrados();
+        return true;
+    },
+
+    filtrarGrupoInteractivo: function () {
+        const grupos = this.obtenerGruposDisponibles();
+
+        if (grupos.length === 0) {
+            alert("No hay grupos disponibles.");
+            return false;
+        }
+
+        const respuesta = prompt(
+            `Escribe el número del grupo que quieres ver:\n\n${grupos.join(", ")}`,
+            this.grupoSeleccionado || ""
+        );
+
+        if (respuesta === null) return false;
+
+        const grupoIngresado = respuesta.toString().trim();
+        if (!grupoIngresado) return false;
+
+        const grupoEncontrado = grupos.find(g =>
+            this.normalizarTexto(g) === this.normalizarTexto(grupoIngresado)
+        );
+
+        if (!grupoEncontrado) {
+            alert("Ese grupo no existe en este recorrido.");
+            return false;
+        }
+
+        return this.filtrarPorGrupo(grupoEncontrado);
     },
 
     actualizarMarcadorTiempoReal: function (lat, lng, grupoActual, mensaje, fechaHora) {
