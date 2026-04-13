@@ -345,6 +345,10 @@
     private bool cargando = true;
     private string? error;
     private bool mapaDibujado;
+    private bool inicializandoMapa;
+    private bool tiempoRealIniciado;
+    private bool disposed;
+
     private HubConnection? hubConnection;
     private string estadoTiempoReal = "UBICACIÓN EN VIVO";
     private string filtroActivo = "";
@@ -360,6 +364,8 @@
             cargando = true;
             error = null;
             mapaDibujado = false;
+            inicializandoMapa = false;
+            tiempoRealIniciado = false;
             estadoTiempoReal = "UBICACIÓN EN VIVO";
             filtroActivo = "";
             mostrarSelectorGrupo = false;
@@ -369,7 +375,22 @@
 
             if (hubConnection is not null)
             {
-                await hubConnection.DisposeAsync();
+                try
+                {
+                    await hubConnection.InvokeAsync("SalirRecorrido", Id);
+                }
+                catch
+                {
+                }
+
+                try
+                {
+                    await hubConnection.DisposeAsync();
+                }
+                catch
+                {
+                }
+
                 hubConnection = null;
             }
 
@@ -387,21 +408,44 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!cargando &&
-            !mapaDibujado &&
-            recorrido is not null &&
-            !string.IsNullOrWhiteSpace(recorrido.RutaGeoJson))
+        if (cargando ||
+            mapaDibujado ||
+            inicializandoMapa ||
+            recorrido is null ||
+            string.IsNullOrWhiteSpace(recorrido.RutaGeoJson))
         {
-            var puntosJson = JsonSerializer.Serialize(recorrido.PuntosRuta ?? new List<PuntoRutaDto>());
+            return;
+        }
 
+        inicializandoMapa = true;
+
+        try
+        {
             await JS.InvokeVoidAsync("mapaRecorrido.esperarGoogleMaps");
             await JS.InvokeVoidAsync("mapaRecorrido.init", "mapa-recorrido", 13.7189, -89.7242, 16);
             await JS.InvokeVoidAsync("mapaRecorrido.drawGeoJson", recorrido.RutaGeoJson);
-            await JS.InvokeVoidAsync("mapaRecorrido.drawPuntosRuta", puntosJson);
-
-            await IniciarTiempoReal();
+            await JS.InvokeVoidAsync("mapaRecorrido.drawPuntosRuta", recorrido.PuntosRuta ?? new List<PuntoRutaDto>());
 
             mapaDibujado = true;
+
+            if (!tiempoRealIniciado)
+            {
+                tiempoRealIniciado = true;
+                await IniciarTiempoReal();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (Exception ex)
+        {
+            mapaDibujado = false;
+            error = ex.Message;
+            await InvokeAsync(StateHasChanged);
+        }
+        finally
+        {
+            inicializandoMapa = false;
         }
     }
 
@@ -414,8 +458,6 @@
         grupoSeleccionadoActual = null;
         gruposDisponibles.Clear();
         mostrarSelectorGrupo = false;
-
-        StateHasChanged();
     }
 
     private async Task FiltrarCargadores()
@@ -426,8 +468,6 @@
         mostrarSelectorGrupo = false;
 
         await JS.InvokeVoidAsync("mapaRecorrido.filtrarPorTipo", "cargador");
-
-        StateHasChanged();
     }
 
     private async Task FiltrarCargadoras()
@@ -438,8 +478,6 @@
         mostrarSelectorGrupo = false;
 
         await JS.InvokeVoidAsync("mapaRecorrido.filtrarPorTipo", "cargadora");
-
-        StateHasChanged();
     }
 
     private async Task FiltrarGrupo()
@@ -459,13 +497,11 @@
         var grupos = await JS.InvokeAsync<string[]>("mapaRecorrido.obtenerGruposPorTipo", tipoSelectorGrupo);
         gruposDisponibles = new List<string>(grupos ?? Array.Empty<string>());
         mostrarSelectorGrupo = true;
-        StateHasChanged();
     }
 
     private void CerrarSelectorGrupo()
     {
         mostrarSelectorGrupo = false;
-        StateHasChanged();
     }
 
     private async Task SeleccionarGrupo(string grupo)
@@ -475,12 +511,13 @@
         filtroActivo = "grupo";
 
         await JS.InvokeVoidAsync("mapaRecorrido.filtrarPorGrupoYTipo", tipoSelectorGrupo, grupo);
-
-        StateHasChanged();
     }
 
     private async Task IniciarTiempoReal()
     {
+        if (disposed || hubConnection is not null)
+            return;
+
         if (Http.BaseAddress is null)
         {
             estadoTiempoReal = "No se pudo resolver la URL de la API.";
@@ -495,9 +532,32 @@
             .WithAutomaticReconnect()
             .Build();
 
+        hubConnection.Reconnecting += _ =>
+        {
+            estadoTiempoReal = "RECONECTANDO...";
+            return InvokeAsync(StateHasChanged);
+        };
+
+        hubConnection.Reconnected += _ =>
+        {
+            estadoTiempoReal = "UBICACIÓN EN VIVO";
+            return InvokeAsync(StateHasChanged);
+        };
+
+        hubConnection.Closed += _ =>
+        {
+            if (!disposed)
+            {
+                estadoTiempoReal = "CONEXIÓN PAUSADA";
+                return InvokeAsync(StateHasChanged);
+            }
+
+            return Task.CompletedTask;
+        };
+
         hubConnection.On<UbicacionProcesionDto>("UbicacionActualizada", async dto =>
         {
-            if (dto.RecorridoId != Id)
+            if (disposed || dto.RecorridoId != Id)
                 return;
 
             await JS.InvokeVoidAsync(
@@ -511,6 +571,8 @@
 
         await hubConnection.StartAsync();
         await hubConnection.InvokeAsync("UnirseRecorrido", Id);
+
+        estadoTiempoReal = "UBICACIÓN EN VIVO";
         await InvokeAsync(StateHasChanged);
     }
 
@@ -548,16 +610,35 @@
 
     public async ValueTask DisposeAsync()
     {
+        disposed = true;
+
         if (hubConnection is not null)
         {
             try
             {
                 await hubConnection.InvokeAsync("SalirRecorrido", Id);
+            }
+            catch
+            {
+            }
+
+            try
+            {
                 await hubConnection.DisposeAsync();
             }
             catch
             {
             }
+
+            hubConnection = null;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("mapaRecorrido.dispose");
+        }
+        catch
+        {
         }
     }
 }

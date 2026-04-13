@@ -4,11 +4,21 @@
     marcadorTiempoReal: null,
     marcadorUsuario: null,
     infoTiempoReal: null,
+    infoPuntos: null,
+
     puntoMarkers: [],
     todosLosPuntos: [],
+    puntosIndexados: [],
+    visiblesActuales: [],
+    renderVersion: 0,
+
     filtroActual: "ninguno",
     grupoSeleccionado: null,
     tipoSeleccionado: null,
+
+    iconoGrupoCache: null,
+    iconoProcesionCache: null,
+    iconoUsuarioCache: null,
 
     esperarGoogleMaps: async function () {
         let intentos = 0;
@@ -27,24 +37,95 @@
         const element = document.getElementById(elementId);
         if (!element) return;
 
+        this.dispose(false);
+
         this.map = new google.maps.Map(element, {
-            center: { lat: lat, lng: lng },
-            zoom: zoom,
+            center: { lat, lng },
+            zoom,
             mapTypeId: "roadmap",
             streetViewControl: false,
             fullscreenControl: false,
-            mapTypeControl: false
+            mapTypeControl: false,
+            gestureHandling: "greedy"
         });
 
         this.dataLayer = new google.maps.Data({ map: this.map });
         this.marcadorTiempoReal = null;
         this.marcadorUsuario = null;
         this.infoTiempoReal = new google.maps.InfoWindow();
+        this.infoPuntos = new google.maps.InfoWindow();
+
         this.puntoMarkers = [];
         this.todosLosPuntos = [];
+        this.puntosIndexados = [];
+        this.visiblesActuales = [];
+        this.renderVersion = 0;
+
         this.filtroActual = "ninguno";
         this.grupoSeleccionado = null;
         this.tipoSeleccionado = null;
+
+        this.iconoGrupoCache = null;
+        this.iconoProcesionCache = null;
+        this.iconoUsuarioCache = null;
+    },
+
+    dispose: function (limpiarElemento = true) {
+        this.renderVersion++;
+
+        if (this.infoPuntos) {
+            this.infoPuntos.close();
+        }
+
+        if (this.infoTiempoReal) {
+            this.infoTiempoReal.close();
+        }
+
+        if (Array.isArray(this.puntosIndexados)) {
+            for (let i = 0; i < this.puntosIndexados.length; i++) {
+                const punto = this.puntosIndexados[i];
+                if (punto && punto._marker) {
+                    google.maps.event.clearInstanceListeners(punto._marker);
+                    punto._marker.setMap(null);
+                    punto._marker = null;
+                    punto._visible = false;
+                }
+            }
+        }
+
+        if (this.marcadorTiempoReal) {
+            google.maps.event.clearInstanceListeners(this.marcadorTiempoReal);
+            this.marcadorTiempoReal.setMap(null);
+            this.marcadorTiempoReal = null;
+        }
+
+        if (this.marcadorUsuario) {
+            google.maps.event.clearInstanceListeners(this.marcadorUsuario);
+            this.marcadorUsuario.setMap(null);
+            this.marcadorUsuario = null;
+        }
+
+        if (this.dataLayer) {
+            this.dataLayer.forEach(feature => this.dataLayer.remove(feature));
+            this.dataLayer.setMap(null);
+            this.dataLayer = null;
+        }
+
+        this.puntoMarkers = [];
+        this.todosLosPuntos = [];
+        this.puntosIndexados = [];
+        this.visiblesActuales = [];
+
+        this.filtroActual = "ninguno";
+        this.grupoSeleccionado = null;
+        this.tipoSeleccionado = null;
+
+        if (limpiarElemento && this.map && this.map.getDiv) {
+            const div = this.map.getDiv();
+            if (div) div.innerHTML = "";
+        }
+
+        this.map = null;
     },
 
     drawGeoJson: function (geoJsonText) {
@@ -107,7 +188,6 @@
 
         if (tipo.includes("cargadora")) return "cargadora";
         if (tipo.includes("cargador")) return "cargador";
-
         return "";
     },
 
@@ -117,107 +197,148 @@
     },
 
     crearIconoGrupo: function () {
+        if (this.iconoGrupoCache) return this.iconoGrupoCache;
+
         const svg = `
             <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">
                 <circle cx="15" cy="15" r="11.5" fill="#7B1FA2" stroke="#F3E5F5" stroke-width="2"/>
             </svg>
         `;
 
-        return {
+        this.iconoGrupoCache = {
             url: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg),
             scaledSize: new google.maps.Size(30, 30),
             size: new google.maps.Size(30, 30),
             anchor: new google.maps.Point(15, 15),
             labelOrigin: new google.maps.Point(15, 15)
         };
+
+        return this.iconoGrupoCache;
+    },
+
+    obtenerIconoProcesion: function () {
+        if (this.iconoProcesionCache) return this.iconoProcesionCache;
+
+        this.iconoProcesionCache = {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 10,
+            fillColor: "#6A1B9A",
+            fillOpacity: 1,
+            strokeColor: "#ffffff",
+            strokeWeight: 3
+        };
+
+        return this.iconoProcesionCache;
+    },
+
+    obtenerIconoUsuario: function () {
+        if (this.iconoUsuarioCache) return this.iconoUsuarioCache;
+
+        this.iconoUsuarioCache = {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 9,
+            fillColor: "#1E88E5",
+            fillOpacity: 1,
+            strokeColor: "#ffffff",
+            strokeWeight: 3
+        };
+
+        return this.iconoUsuarioCache;
     },
 
     limpiarPuntosRuta: function () {
-        this.puntoMarkers.forEach(marker => marker.setMap(null));
+        this.renderVersion++;
+
+        if (this.infoPuntos) {
+            this.infoPuntos.close();
+        }
+
+        for (let i = 0; i < this.puntosIndexados.length; i++) {
+            const punto = this.puntosIndexados[i];
+            if (punto && punto._marker) {
+                google.maps.event.clearInstanceListeners(punto._marker);
+                punto._marker.setMap(null);
+                punto._marker = null;
+                punto._visible = false;
+            }
+        }
+
         this.puntoMarkers = [];
+        this.todosLosPuntos = [];
+        this.puntosIndexados = [];
+        this.visiblesActuales = [];
     },
 
-    drawPuntosRuta: function (puntosJson) {
+    drawPuntosRuta: function (puntosData) {
         if (!this.map) return;
 
         try {
-            const puntos = typeof puntosJson === "string"
-                ? JSON.parse(puntosJson)
-                : puntosJson;
+            const puntos = Array.isArray(puntosData)
+                ? puntosData
+                : (typeof puntosData === "string" ? JSON.parse(puntosData) : []);
 
-            this.todosLosPuntos = (Array.isArray(puntos) ? puntos : []).map((p, index) => ({
-                ...p,
-                _indiceOriginal: index
-            }));
+            this.limpiarPuntosRuta();
+
+            this.todosLosPuntos = Array.isArray(puntos) ? puntos : [];
+
+            this.puntosIndexados = this.todosLosPuntos
+                .map((p, index) => {
+                    const tipo = this.obtenerTipoPunto(p);
+                    const grupo = this.obtenerGrupoPunto(p, index);
+
+                    const latRaw = p.Latitud ?? p.latitud;
+                    const lngRaw = p.Longitud ?? p.longitud;
+
+                    const lat = Number(latRaw);
+                    const lng = Number(lngRaw);
+
+                    return {
+                        ...p,
+                        _indiceOriginal: index,
+                        _tipoNormalizado: tipo,
+                        _grupoTexto: grupo,
+                        _grupoNormalizado: this.normalizarTexto(grupo),
+                        _lat: Number.isFinite(lat) ? lat : null,
+                        _lng: Number.isFinite(lng) ? lng : null,
+                        _marker: null,
+                        _visible: false,
+                        _markerKey: `${tipo}|${this.normalizarTexto(grupo)}|${index}`
+                    };
+                })
+                .filter(p => p._lat !== null && p._lng !== null);
 
             this.filtroActual = "ninguno";
             this.grupoSeleccionado = null;
             this.tipoSeleccionado = null;
-            this.limpiarPuntosRuta();
         } catch (error) {
             console.error("Error al cargar puntos de ruta:", error);
+            this.limpiarPuntosRuta();
         }
     },
 
-    obtenerPuntosFiltrados: function () {
-        if (!Array.isArray(this.todosLosPuntos)) return [];
+    crearMarkerParaPunto: function (punto) {
+        if (punto._marker) return punto._marker;
 
-        if (this.filtroActual === "ninguno") {
-            return [];
-        }
+        const tipo = punto._tipoNormalizado;
+        const grupo = punto._grupoTexto;
+        const referencia = punto.Referencia ?? punto.referencia ?? "";
 
-        if (this.filtroActual === "cargador") {
-            return this.todosLosPuntos.filter(p => this.obtenerTipoPunto(p) === "cargador");
-        }
+        const marker = new google.maps.Marker({
+            position: { lat: punto._lat, lng: punto._lng },
+            map: null,
+            icon: this.crearIconoGrupo(),
+            title: `${tipo === "cargadora" ? "Cargadora" : tipo === "cargador" ? "Cargador" : "Grupo"} ${grupo}`,
+            label: {
+                text: grupo,
+                color: "#FFFFFF",
+                fontSize: "10px",
+                fontWeight: "700"
+            },
+            zIndex: 900,
+            optimized: true
+        });
 
-        if (this.filtroActual === "cargadora") {
-            return this.todosLosPuntos.filter(p => this.obtenerTipoPunto(p) === "cargadora");
-        }
-
-        if (this.filtroActual === "grupo-tipo" && this.tipoSeleccionado && this.grupoSeleccionado) {
-            const grupoBuscado = this.normalizarTexto(this.grupoSeleccionado);
-
-            return this.todosLosPuntos.filter((p, index) => {
-                const grupo = this.obtenerGrupoPunto(p, index);
-                return this.obtenerTipoPunto(p) === this.tipoSeleccionado &&
-                    this.normalizarTexto(grupo) === grupoBuscado;
-            });
-        }
-
-        return [];
-    },
-
-    redibujarPuntosFiltrados: function () {
-        if (!this.map) return;
-
-        this.limpiarPuntosRuta();
-
-        const puntos = this.obtenerPuntosFiltrados();
-        const iconoGrupo = this.crearIconoGrupo();
-
-        puntos.forEach((punto, index) => {
-            const lat = punto.Latitud ?? punto.latitud;
-            const lng = punto.Longitud ?? punto.longitud;
-            const grupo = this.obtenerGrupoPunto(punto, index);
-            const referencia = punto.Referencia ?? punto.referencia ?? "";
-            const tipo = this.obtenerTipoPunto(punto);
-
-            if (lat == null || lng == null) return;
-
-            const marker = new google.maps.Marker({
-                position: { lat: lat, lng: lng },
-                map: this.map,
-                icon: iconoGrupo,
-                title: `${tipo === "cargadora" ? "Cargadora" : tipo === "cargador" ? "Cargador" : "Grupo"} ${grupo}`,
-                label: {
-                    text: grupo,
-                    color: "#FFFFFF",
-                    fontSize: "10px",
-                    fontWeight: "700"
-                },
-                zIndex: 900
-            });
-
+        marker.addListener("click", () => {
             const contenido = `
                 <div style="min-width:150px">
                     <strong>Grupo: ${grupo || "Sin definir"}</strong>
@@ -226,27 +347,113 @@
                 </div>
             `;
 
-            const info = new google.maps.InfoWindow({
-                content: contenido
-            });
+            this.infoPuntos.setContent(contenido);
+            this.infoPuntos.open(this.map, marker);
+        });
 
-            marker.addListener("click", () => {
-                info.open(this.map, marker);
-            });
+        punto._marker = marker;
+        this.puntoMarkers.push(marker);
 
-            this.puntoMarkers.push(marker);
+        return marker;
+    },
+
+    obtenerPuntosFiltrados: function () {
+        if (!Array.isArray(this.puntosIndexados)) return [];
+
+        if (this.filtroActual === "ninguno") {
+            return [];
+        }
+
+        if (this.filtroActual === "cargador") {
+            return this.puntosIndexados.filter(p => p._tipoNormalizado === "cargador");
+        }
+
+        if (this.filtroActual === "cargadora") {
+            return this.puntosIndexados.filter(p => p._tipoNormalizado === "cargadora");
+        }
+
+        if (this.filtroActual === "grupo-tipo" && this.tipoSeleccionado && this.grupoSeleccionado) {
+            const grupoBuscado = this.normalizarTexto(this.grupoSeleccionado);
+
+            return this.puntosIndexados.filter(p =>
+                p._tipoNormalizado === this.tipoSeleccionado &&
+                p._grupoNormalizado === grupoBuscado
+            );
+        }
+
+        return [];
+    },
+
+    sincronizarPuntosVisibles: function (puntosVisibles, version) {
+        if (!this.map) return Promise.resolve(false);
+
+        const nuevasKeys = new Set(puntosVisibles.map(p => p._markerKey));
+
+        if (this.infoPuntos) {
+            this.infoPuntos.close();
+        }
+
+        for (let i = 0; i < this.puntosIndexados.length; i++) {
+            const punto = this.puntosIndexados[i];
+            if (punto._visible && !nuevasKeys.has(punto._markerKey) && punto._marker) {
+                punto._marker.setMap(null);
+                punto._visible = false;
+            }
+        }
+
+        this.visiblesActuales = puntosVisibles;
+
+        const lote = 35;
+        let index = 0;
+
+        return new Promise(resolve => {
+            const procesar = () => {
+                if (version !== this.renderVersion || !this.map) {
+                    resolve(false);
+                    return;
+                }
+
+                const limite = Math.min(index + lote, puntosVisibles.length);
+
+                for (; index < limite; index++) {
+                    const punto = puntosVisibles[index];
+
+                    if (!punto._visible) {
+                        const marker = this.crearMarkerParaPunto(punto);
+                        marker.setMap(this.map);
+                        punto._visible = true;
+                    }
+                }
+
+                if (index < puntosVisibles.length) {
+                    requestAnimationFrame(procesar);
+                } else {
+                    resolve(true);
+                }
+            };
+
+            requestAnimationFrame(procesar);
         });
     },
 
-    ocultarTodosLosPuntos: function () {
-        this.filtroActual = "ninguno";
-        this.grupoSeleccionado = null;
-        this.tipoSeleccionado = null;
-        this.limpiarPuntosRuta();
+    redibujarPuntosFiltrados: async function () {
+        if (!this.map) return false;
+
+        const version = ++this.renderVersion;
+        const puntos = this.obtenerPuntosFiltrados();
+        await this.sincronizarPuntosVisibles(puntos, version);
         return true;
     },
 
-    filtrarPorTipo: function (tipo) {
+    ocultarTodosLosPuntos: async function () {
+        this.filtroActual = "ninguno";
+        this.grupoSeleccionado = null;
+        this.tipoSeleccionado = null;
+        await this.redibujarPuntosFiltrados();
+        return true;
+    },
+
+    filtrarPorTipo: async function (tipo) {
         const tipoNormalizado = this.normalizarTexto(tipo);
 
         if (tipoNormalizado === "cargadora") {
@@ -258,7 +465,7 @@
         }
 
         this.grupoSeleccionado = null;
-        this.redibujarPuntosFiltrados();
+        await this.redibujarPuntosFiltrados();
         return true;
     },
 
@@ -266,9 +473,9 @@
         const tipoNormalizado = this.normalizarTexto(tipo);
 
         const grupos = [...new Set(
-            this.todosLosPuntos
-                .filter(p => this.obtenerTipoPunto(p) === tipoNormalizado)
-                .map((p, index) => this.obtenerGrupoPunto(p, index))
+            this.puntosIndexados
+                .filter(p => p._tipoNormalizado === tipoNormalizado)
+                .map(p => p._grupoTexto)
                 .filter(g => g && g.trim() !== "")
         )];
 
@@ -286,36 +493,30 @@
         return grupos;
     },
 
-    filtrarPorGrupoYTipo: function (tipo, grupo) {
+    filtrarPorGrupoYTipo: async function (tipo, grupo) {
         if (!tipo || !grupo) return false;
 
         this.filtroActual = "grupo-tipo";
         this.tipoSeleccionado = this.normalizarTexto(tipo);
         this.grupoSeleccionado = grupo.toString().trim();
-        this.redibujarPuntosFiltrados();
+
+        await this.redibujarPuntosFiltrados();
         return true;
     },
 
     actualizarMarcadorTiempoReal: function (lat, lng, grupoActual, mensaje, fechaHora) {
         if (!this.map) return;
 
-        const position = { lat: lat, lng: lng };
-
-        const iconoProcesion = {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 10,
-            fillColor: "#6A1B9A",
-            fillOpacity: 1,
-            strokeColor: "#ffffff",
-            strokeWeight: 3
-        };
+        const position = { lat, lng };
 
         if (!this.marcadorTiempoReal) {
             this.marcadorTiempoReal = new google.maps.Marker({
-                position: position,
+                position,
                 map: this.map,
                 title: grupoActual || "Procesión",
-                icon: iconoProcesion
+                icon: this.obtenerIconoProcesion(),
+                zIndex: 1100,
+                optimized: true
             });
 
             this.marcadorTiempoReal.addListener("click", () => {
@@ -324,7 +525,6 @@
         } else {
             this.marcadorTiempoReal.setPosition(position);
             this.marcadorTiempoReal.setTitle(grupoActual || "Procesión");
-            this.marcadorTiempoReal.setIcon(iconoProcesion);
         }
 
         this.infoTiempoReal.setContent(`<div>
@@ -336,28 +536,19 @@
     mostrarMiUbicacion: function (lat, lng, centrar = false) {
         if (!this.map) return;
 
-        const position = { lat: lat, lng: lng };
-
-        const iconoUsuario = {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 9,
-            fillColor: "#1E88E5",
-            fillOpacity: 1,
-            strokeColor: "#ffffff",
-            strokeWeight: 3
-        };
+        const position = { lat, lng };
 
         if (!this.marcadorUsuario) {
             this.marcadorUsuario = new google.maps.Marker({
-                position: position,
+                position,
                 map: this.map,
                 title: "Mi ubicación",
-                icon: iconoUsuario,
-                zIndex: 1000
+                icon: this.obtenerIconoUsuario(),
+                zIndex: 1200,
+                optimized: true
             });
         } else {
             this.marcadorUsuario.setPosition(position);
-            this.marcadorUsuario.setIcon(iconoUsuario);
         }
 
         if (centrar) {

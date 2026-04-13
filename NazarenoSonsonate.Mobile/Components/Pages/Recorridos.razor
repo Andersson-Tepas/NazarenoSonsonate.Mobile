@@ -190,7 +190,19 @@ else
     {
         try
         {
-            recorridos = await RecorridoService.ObtenerRecorridosAsync();
+            cargando = true;
+            error = null;
+
+            recorridos = await RecorridoService.ObtenerRecorridosAsync(
+                forzarRecarga: false,
+                permitirApi: false);
+
+            if (recorridos.Count == 0)
+            {
+                recorridos = await RecorridoService.ObtenerRecorridosAsync(
+                    forzarRecarga: true,
+                    permitirApi: true);
+            }
         }
         catch (Exception ex)
         {

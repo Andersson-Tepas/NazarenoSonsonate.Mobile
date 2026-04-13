@@ -31,7 +31,7 @@ public static class MauiProgram
             BaseAddress = new Uri(baseUrl)
         });
 
-        builder.Services.AddScoped<RecorridoService>();
+        builder.Services.AddSingleton<RecorridoService>();
         builder.Services.AddScoped<SignalRService>();
         builder.Services.AddScoped<UbicacionService>();
 
