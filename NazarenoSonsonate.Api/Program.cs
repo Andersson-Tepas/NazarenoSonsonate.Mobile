@@ -1,4 +1,7 @@
-﻿using NazarenoSonsonate.Api.Hubs;
+﻿using Microsoft.EntityFrameworkCore;
+using NazarenoSonsonate.Api;
+using NazarenoSonsonate.Api.Data;
+using NazarenoSonsonate.Api.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +12,10 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSignalR();
+
+// ✅ DbContext
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddCors(options =>
 {

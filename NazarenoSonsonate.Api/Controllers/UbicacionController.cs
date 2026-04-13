@@ -16,6 +16,7 @@ namespace NazarenoSonsonate.Api.Controllers
             _hubContext = hubContext;
         }
 
+        // ✅ GET (SIMULADO - LO DEJAMOS COMO LO TENÍAS)
         [HttpGet("{recorridoId:int}")]
         public ActionResult<UbicacionProcesionDto> Get(int recorridoId)
         {
@@ -32,6 +33,7 @@ namespace NazarenoSonsonate.Api.Controllers
             return Ok(ubicacion);
         }
 
+        // ✅ POST (ENVÍA A SIGNALR)
         [HttpPost]
         public async Task<IActionResult> Post([FromBody] UbicacionProcesionDto ubicacion)
         {
@@ -40,9 +42,10 @@ namespace NazarenoSonsonate.Api.Controllers
 
             ubicacion.FechaHora = DateTime.Now;
 
+            // 🔥 IMPORTANTE: nombre del evento corregido
             await _hubContext.Clients
                 .Group($"recorrido-{ubicacion.RecorridoId}")
-                .SendAsync("UbicacionActualizada", ubicacion);
+                .SendAsync("RecibirUbicacion", ubicacion);
 
             return Ok(new
             {

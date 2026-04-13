@@ -16,17 +16,25 @@ namespace NazarenoSonsonate.Mobile.Services
 
         public async Task IniciarAsync(string baseUrl)
         {
-            _hubConnection = new HubConnectionBuilder()
-                .WithUrl($"{baseUrl}hubs/procesion")
-                .WithAutomaticReconnect()
-                .Build();
-
-            _hubConnection.On<UbicacionProcesionDto>("RecibirUbicacion", ubicacion =>
+            try
             {
-                UbicacionRecibida?.Invoke(ubicacion);
-            });
+                _hubConnection = new HubConnectionBuilder()
+                    .WithUrl($"{baseUrl}hubs/procesion")
+                    .WithAutomaticReconnect()
+                    .Build();
 
-            await _hubConnection.StartAsync();
+                _hubConnection.On<UbicacionProcesionDto>("RecibirUbicacion", ubicacion =>
+                {
+                    UbicacionRecibida?.Invoke(ubicacion);
+                });
+
+                await _hubConnection.StartAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error SignalR: {ex.Message}");
+                // 🔥 NO reventar la app
+            }
         }
 
         public async Task DetenerAsync()

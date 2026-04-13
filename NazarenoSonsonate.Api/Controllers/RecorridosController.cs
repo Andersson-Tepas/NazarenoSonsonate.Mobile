@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using NazarenoSonsonate.Api.Data;
+using NazarenoSonsonate.Api.Models;
 using NazarenoSonsonate.Shared.DTOs;
 using NazarenoSonsonate.Shared.Enums;
-using System.Text.Json;
 
 namespace NazarenoSonsonate.Api.Controllers
 {
@@ -9,202 +11,149 @@ namespace NazarenoSonsonate.Api.Controllers
     [Route("api/[controller]")]
     public class RecorridosController : ControllerBase
     {
-        private readonly string _filePath;
-        private static readonly object _fileLock = new();
+        private readonly AppDbContext _context;
 
-        public RecorridosController(IWebHostEnvironment env)
+        public RecorridosController(AppDbContext context)
         {
-            var dataFolder = Path.Combine(env.ContentRootPath, "Data");
-            Directory.CreateDirectory(dataFolder);
-
-            _filePath = Path.Combine(dataFolder, "recorridos.json");
-
-            if (!System.IO.File.Exists(_filePath))
-            {
-                var iniciales = ObtenerRecorridosIniciales();
-                var json = JsonSerializer.Serialize(iniciales, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
-
-                System.IO.File.WriteAllText(_filePath, json);
-            }
+            _context = context;
         }
 
+        // ✅ GET: api/recorridos
         [HttpGet]
-        public ActionResult<List<RecorridoDto>> Get()
+        public async Task<ActionResult<List<RecorridoDto>>> Get()
         {
-            var recorridos = LeerRecorridos();
-            return Ok(recorridos);
+            var recorridos = await _context.Recorridos
+                .Include(r => r.PuntosRuta)
+                .ToListAsync();
+
+            var resultado = recorridos.Select(r => new RecorridoDto
+            {
+                Id = r.Id,
+                Nombre = r.Nombre,
+                Descripcion = r.Descripcion,
+                HoraSalida = r.HoraSalida,
+                Activo = r.Activo,
+
+                // 🔥 CORRECCIÓN AQUÍ
+                Tipo = (TipoRecorrido)r.Tipo,
+
+                RutaGeoJson = r.RutaGeoJson,
+
+                PuntosRuta = r.PuntosRuta.Select(p => new PuntoRutaDto
+                {
+                    Id = p.Id,
+                    RecorridoId = p.RecorridoId,
+                    Latitud = p.Latitud,
+                    Longitud = p.Longitud,
+                    Orden = p.Orden,
+                    Referencia = p.Referencia,
+                    Grupo = p.Grupo,
+                    Tipo = p.Tipo
+                }).ToList()
+            }).ToList();
+
+            return Ok(resultado);
         }
 
+        // ✅ GET: api/recorridos/1
         [HttpGet("{id:int}")]
-        public ActionResult<RecorridoDto> GetById(int id)
+        public async Task<ActionResult<RecorridoDto>> GetById(int id)
         {
-            var recorridos = LeerRecorridos();
-            var recorrido = recorridos.FirstOrDefault(x => x.Id == id);
+            var r = await _context.Recorridos
+                .Include(x => x.PuntosRuta)
+                .FirstOrDefaultAsync(x => x.Id == id);
 
-            if (recorrido is null)
+            if (r == null)
                 return NotFound();
 
-            return Ok(recorrido);
+            var dto = new RecorridoDto
+            {
+                Id = r.Id,
+                Nombre = r.Nombre,
+                Descripcion = r.Descripcion,
+                HoraSalida = r.HoraSalida,
+                Activo = r.Activo,
+
+                // 🔥 CORRECCIÓN AQUÍ TAMBIÉN
+                Tipo = (TipoRecorrido)r.Tipo,
+
+                RutaGeoJson = r.RutaGeoJson,
+
+                PuntosRuta = r.PuntosRuta.Select(p => new PuntoRutaDto
+                {
+                    Id = p.Id,
+                    RecorridoId = p.RecorridoId,
+                    Latitud = p.Latitud,
+                    Longitud = p.Longitud,
+                    Orden = p.Orden,
+                    Referencia = p.Referencia,
+                    Grupo = p.Grupo,
+                    Tipo = p.Tipo
+                }).ToList()
+            };
+
+            return Ok(dto);
         }
 
+        // ✅ PUT: api/recorridos/1/ruta
         [HttpPut("{id:int}/ruta")]
-        public IActionResult GuardarRuta(int id, [FromBody] GuardarRutaRequest request)
+        public async Task<IActionResult> GuardarRuta(int id, [FromBody] GuardarRutaRequest request)
         {
-            var recorridos = LeerRecorridos();
-            var recorrido = recorridos.FirstOrDefault(x => x.Id == id);
+            var recorrido = await _context.Recorridos.FindAsync(id);
 
-            if (recorrido is null)
+            if (recorrido == null)
                 return NotFound();
 
             recorrido.RutaGeoJson = request.RutaGeoJson;
-            GuardarRecorridos(recorridos);
+
+            await _context.SaveChangesAsync();
 
             return NoContent();
         }
 
+        // ✅ PUT: api/recorridos/1/mapa
         [HttpPut("{id:int}/mapa")]
-        public IActionResult GuardarMapa(int id, [FromBody] GuardarMapaRecorridoDto request)
+        public async Task<IActionResult> GuardarMapa(int id, [FromBody] GuardarMapaRecorridoDto request)
         {
-            var recorridos = LeerRecorridos();
-            var recorrido = recorridos.FirstOrDefault(x => x.Id == id);
+            var recorrido = await _context.Recorridos
+                .Include(r => r.PuntosRuta)
+                .FirstOrDefaultAsync(r => r.Id == id);
 
-            if (recorrido is null)
+            if (recorrido == null)
                 return NotFound();
 
             recorrido.RutaGeoJson = request.RutaGeoJson;
-            recorrido.PuntosRuta = request.PuntosRuta ?? new List<PuntoRutaDto>();
 
-            NormalizarPuntos(recorrido.PuntosRuta, id);
+            // ❌ eliminar puntos anteriores
+            _context.PuntosRuta.RemoveRange(recorrido.PuntosRuta);
 
-            GuardarRecorridos(recorridos);
+            // ✅ agregar nuevos puntos
+            var nuevos = request.PuntosRuta.Select((p, index) => new PuntoRuta
+            {
+                RecorridoId = id,
+                Latitud = p.Latitud,
+                Longitud = p.Longitud,
+                Orden = index + 1,
+                Referencia = p.Referencia,
+                Grupo = p.Grupo,
+                Tipo = NormalizarTipo(p.Tipo)
+            });
+
+            await _context.PuntosRuta.AddRangeAsync(nuevos);
+
+            await _context.SaveChangesAsync();
 
             return NoContent();
-        }
-
-        private List<RecorridoDto> LeerRecorridos()
-        {
-            lock (_fileLock)
-            {
-                if (!System.IO.File.Exists(_filePath))
-                    return ObtenerRecorridosIniciales();
-
-                using var stream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                using var reader = new StreamReader(stream);
-                var json = reader.ReadToEnd();
-
-                if (string.IsNullOrWhiteSpace(json))
-                    return ObtenerRecorridosIniciales();
-
-                var options = new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                };
-
-                var recorridos = JsonSerializer.Deserialize<List<RecorridoDto>>(json, options)
-                                ?? ObtenerRecorridosIniciales();
-
-                foreach (var recorrido in recorridos)
-                {
-                    recorrido.PuntosRuta ??= new List<PuntoRutaDto>();
-                    NormalizarPuntos(recorrido.PuntosRuta, recorrido.Id);
-                }
-
-                return recorridos;
-            }
-        }
-
-        private void GuardarRecorridos(List<RecorridoDto> recorridos)
-        {
-            lock (_fileLock)
-            {
-                var options = new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                };
-
-                var json = JsonSerializer.Serialize(recorridos, options);
-
-                using var stream = new FileStream(_filePath, FileMode.Create, FileAccess.Write, FileShare.None);
-                using var writer = new StreamWriter(stream);
-                writer.Write(json);
-            }
-        }
-
-        private static void NormalizarPuntos(List<PuntoRutaDto> puntos, int recorridoId)
-        {
-            for (int i = 0; i < puntos.Count; i++)
-            {
-                puntos[i].RecorridoId = recorridoId;
-                puntos[i].Orden = i + 1;
-                puntos[i].Tipo = NormalizarTipo(puntos[i].Tipo);
-            }
         }
 
         private static string NormalizarTipo(string? tipo)
         {
-            var valor = (tipo ?? string.Empty).Trim().ToLowerInvariant();
+            var valor = (tipo ?? "").ToLower();
 
             if (valor.Contains("cargadora"))
                 return "Cargadora";
 
-            if (valor.Contains("cargador"))
-                return "Cargador";
-
             return "Cargador";
-        }
-
-        private static List<RecorridoDto> ObtenerRecorridosIniciales()
-        {
-            return new List<RecorridoDto>
-            {
-                new RecorridoDto
-                {
-                    Id = 1,
-                    Nombre = "Lunes Santo",
-                    Descripcion = "Recorrido procesional de Lunes Santo",
-                    HoraSalida = "3:00 PM",
-                    Activo = true,
-                    Tipo = TipoRecorrido.LunesSanto,
-                    PuntosRuta = new(),
-                    RutaGeoJson = null
-                },
-                new RecorridoDto
-                {
-                    Id = 2,
-                    Nombre = "Martes Santo",
-                    Descripcion = "Recorrido procesional de Martes Santo",
-                    HoraSalida = "3:00 PM",
-                    Activo = true,
-                    Tipo = TipoRecorrido.MartesSanto,
-                    PuntosRuta = new(),
-                    RutaGeoJson = null
-                },
-                new RecorridoDto
-                {
-                    Id = 3,
-                    Nombre = "Miércoles Santo",
-                    Descripcion = "Recorrido procesional de Miércoles Santo",
-                    HoraSalida = "2:00 PM",
-                    Activo = true,
-                    Tipo = TipoRecorrido.MiercolesSanto,
-                    PuntosRuta = new(),
-                    RutaGeoJson = null
-                },
-                new RecorridoDto
-                {
-                    Id = 4,
-                    Nombre = "Viernes Santo",
-                    Descripcion = "Recorrido procesional de Viernes Santo",
-                    HoraSalida = "6:00 AM",
-                    Activo = true,
-                    Tipo = TipoRecorrido.ViernesSanto,
-                    PuntosRuta = new(),
-                    RutaGeoJson = null
-                }
-            };
         }
 
         public class GuardarRutaRequest
