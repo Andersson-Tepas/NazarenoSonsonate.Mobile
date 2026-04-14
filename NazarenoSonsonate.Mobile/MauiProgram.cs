@@ -32,6 +32,7 @@ public static class MauiProgram
         });
 
         builder.Services.AddSingleton<RecorridoService>();
+        builder.Services.AddSingleton<PuntoRutaCacheService>();
         builder.Services.AddScoped<SignalRService>();
         builder.Services.AddScoped<UbicacionService>();
 

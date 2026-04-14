@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>NazarenoSonsonate.Mobile</title>
     <base href="/" />
+
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="stylesheet" href="NazarenoSonsonate.Mobile.styles.css" />
@@ -14,23 +15,12 @@
         body {
             background-color: #2b002a;
             margin: 0;
-            overflow-x: hidden; /* Permite bajar y subir, pero evita que la pantalla se mueva hacia los lados */
+            overflow-x: hidden;
         }
     </style>
-
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-
-    <script>
-        window.googleMapsReady = false;
-        window.nazarenoGoogleMapsLoaded = function () {
-            window.googleMapsReady = true;
-        };
-    </script>
 </head>
 
 <body>
-
     <div class="status-bar-safe-area"></div>
 
     <div id="app"></div>
@@ -42,15 +32,5 @@
     </div>
 
     <script src="_framework/blazor.webview.js" autostart="false"></script>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-
-    <script async defer
-            src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBfVQADIjXfJSWGD-14tz4cuLfc8Pv8pcA&loading=async&callback=nazarenoGoogleMapsLoaded"></script>
-
-    <script src="js/mapaRecorrido.js"></script>
-    <script src="js/mapaRecorridoAdmin.js"></script>
-
 </body>
 </html>

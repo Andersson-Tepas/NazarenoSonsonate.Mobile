@@ -5,6 +5,7 @@
 @inject IJSRuntime JS
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
 @inject NavigationManager Navigation
+@implements IAsyncDisposable
 
 <style>
     .editor-container {
@@ -322,6 +323,7 @@
     private string? error;
     private string? mensaje;
     private bool mapaInicializado;
+    private bool dependenciasMapaCargadas;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -348,20 +350,76 @@
     {
         if (!cargando && !mapaInicializado && recorrido is not null)
         {
-            var checkpointsJson = JsonSerializer.Serialize(recorrido.PuntosRuta);
+            try
+            {
+                await CargarDependenciasMapaAdminAsync();
 
-            await JS.InvokeVoidAsync("mapaRecorridoAdmin.esperarGoogleMaps");
-            await JS.InvokeVoidAsync(
-                "mapaRecorridoAdmin.init",
-                "mapa-admin",
-                13.7189,
-                -89.7242,
-                16,
-                recorrido.RutaGeoJson,
-                checkpointsJson);
+                var checkpointsJson = JsonSerializer.Serialize(recorrido.PuntosRuta);
 
-            mapaInicializado = true;
+                await JS.InvokeVoidAsync("mapaRecorridoAdmin.esperarGoogleMaps");
+                await JS.InvokeVoidAsync(
+                    "mapaRecorridoAdmin.init",
+                    "mapa-admin",
+                    13.7189,
+                    -89.7242,
+                    16,
+                    recorrido.RutaGeoJson,
+                    checkpointsJson);
+
+                mapaInicializado = true;
+            }
+            catch (Exception ex)
+            {
+                error = $"Error al inicializar mapa: {ex.Message}";
+                await InvokeAsync(StateHasChanged);
+            }
         }
+    }
+
+    private async Task CargarDependenciasMapaAdminAsync()
+    {
+        if (dependenciasMapaCargadas)
+            return;
+
+        var googleMapsUrl = "https://maps.googleapis.com/maps/api/js?key=AIzaSyBfVQADIjXfJSWGD-14tz4cuLfc8Pv8pcA&loading=async&callback=nazarenoGoogleMapsLoaded";
+
+        var script = $@"
+(async function () {{
+    window.googleMapsReady = window.googleMapsReady || false;
+    window.nazarenoGoogleMapsLoaded = window.nazarenoGoogleMapsLoaded || function () {{
+        window.googleMapsReady = true;
+    }};
+
+    function loadScript(src, id) {{
+        return new Promise(function (resolve, reject) {{
+            if (document.getElementById(id)) {{
+                resolve();
+                return;
+            }}
+
+            var script = document.createElement('script');
+            script.id = id;
+            script.src = src;
+            script.async = true;
+            script.defer = true;
+            script.onload = function () {{ resolve(); }};
+            script.onerror = function () {{ reject(new Error('No se pudo cargar ' + src)); }};
+            document.body.appendChild(script);
+        }});
+    }}
+
+    if (!window.google || !window.google.maps) {{
+        await loadScript('{googleMapsUrl}', 'google-maps-js');
+    }} else {{
+        window.googleMapsReady = true;
+    }}
+
+    await loadScript('js/mapaRecorridoAdmin.js', 'mapa-recorrido-admin-js');
+}})();
+";
+
+        await JS.InvokeVoidAsync("eval", script);
+        dependenciasMapaCargadas = true;
     }
 
     private async Task ActivarCheckpoint()
@@ -421,5 +479,19 @@
     private void VolverARecorridos()
     {
         Navigation.NavigateTo("/recorridos");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (dependenciasMapaCargadas)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("mapaRecorridoAdmin.dispose");
+            }
+            catch
+            {
+            }
+        }
     }
 }

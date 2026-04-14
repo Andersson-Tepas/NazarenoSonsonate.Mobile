@@ -347,6 +347,7 @@
     private bool mapaDibujado;
     private bool inicializandoMapa;
     private bool tiempoRealIniciado;
+    private bool dependenciasMapaCargadas;
     private bool disposed;
 
     private HubConnection? hubConnection;
@@ -356,6 +357,10 @@
     private List<string> gruposDisponibles = new();
     private string? grupoSeleccionadoActual;
     private string tipoSelectorGrupo = "";
+
+    private List<PuntoRutaDto> puntosRutaCache = new();
+    private readonly Dictionary<string, List<PuntoRutaDto>> puntosPorTipoCache = new();
+    private readonly Dictionary<string, List<string>> gruposPorTipoCache = new();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -372,6 +377,10 @@
             gruposDisponibles = new();
             grupoSeleccionadoActual = null;
             tipoSelectorGrupo = "";
+
+            puntosRutaCache = new();
+            puntosPorTipoCache.Clear();
+            gruposPorTipoCache.Clear();
 
             if (hubConnection is not null)
             {
@@ -395,6 +404,9 @@
             }
 
             recorrido = await RecorridoService.ObtenerRecorridoPorIdAsync(Id);
+
+            puntosRutaCache = recorrido?.PuntosRuta?.ToList() ?? new List<PuntoRutaDto>();
+            ConstruirCacheLocal();
         }
         catch (Exception ex)
         {
@@ -421,10 +433,12 @@
 
         try
         {
+            await CargarDependenciasMapaAsync();
+
             await JS.InvokeVoidAsync("mapaRecorrido.esperarGoogleMaps");
             await JS.InvokeVoidAsync("mapaRecorrido.init", "mapa-recorrido", 13.7189, -89.7242, 16);
             await JS.InvokeVoidAsync("mapaRecorrido.drawGeoJson", recorrido.RutaGeoJson);
-            await JS.InvokeVoidAsync("mapaRecorrido.drawPuntosRuta", recorrido.PuntosRuta ?? new List<PuntoRutaDto>());
+            await JS.InvokeVoidAsync("mapaRecorrido.drawPuntosRuta", puntosRutaCache);
 
             mapaDibujado = true;
 
@@ -449,6 +463,130 @@
         }
     }
 
+    private async Task CargarDependenciasMapaAsync()
+    {
+        if (dependenciasMapaCargadas)
+            return;
+
+        var googleMapsUrl = "https://maps.googleapis.com/maps/api/js?key=AIzaSyBfVQADIjXfJSWGD-14tz4cuLfc8Pv8pcA&loading=async&callback=nazarenoGoogleMapsLoaded";
+
+        var script = $@"
+(async function () {{
+    window.googleMapsReady = window.googleMapsReady || false;
+    window.nazarenoGoogleMapsLoaded = window.nazarenoGoogleMapsLoaded || function () {{
+        window.googleMapsReady = true;
+    }};
+
+    function loadScript(src, id) {{
+        return new Promise(function (resolve, reject) {{
+            if (document.getElementById(id)) {{
+                resolve();
+                return;
+            }}
+
+            var script = document.createElement('script');
+            script.id = id;
+            script.src = src;
+            script.async = true;
+            script.defer = true;
+            script.onload = function () {{ resolve(); }};
+            script.onerror = function () {{ reject(new Error('No se pudo cargar ' + src)); }};
+            document.body.appendChild(script);
+        }});
+    }}
+
+    if (!window.google || !window.google.maps) {{
+        await loadScript('{googleMapsUrl}', 'google-maps-js');
+    }} else {{
+        window.googleMapsReady = true;
+    }}
+
+    await loadScript('js/mapaRecorrido.js', 'mapa-recorrido-js');
+}})();
+";
+
+        await JS.InvokeVoidAsync("eval", script);
+        dependenciasMapaCargadas = true;
+    }
+
+    private void ConstruirCacheLocal()
+    {
+        puntosPorTipoCache.Clear();
+        gruposPorTipoCache.Clear();
+
+        CachearTipo("cargador");
+        CachearTipo("cargadora");
+    }
+
+    private void CachearTipo(string tipo)
+    {
+        var puntos = puntosRutaCache
+            .Where(x => TipoCoincide(x.Tipo, tipo))
+            .ToList();
+
+        puntosPorTipoCache[tipo] = puntos;
+
+        var grupos = puntos
+            .Where(x => !string.IsNullOrWhiteSpace(x.Grupo))
+            .Select(x => x.Grupo!.Trim())
+            .Distinct()
+            .OrderBy(x =>
+            {
+                if (int.TryParse(x, out var numero))
+                    return numero;
+
+                return int.MaxValue;
+            })
+            .ThenBy(x => x)
+            .ToList();
+
+        gruposPorTipoCache[tipo] = grupos;
+    }
+
+    private bool TipoCoincide(string? valor, string tipoEsperado)
+    {
+        return string.Equals(
+            valor?.Trim(),
+            tipoEsperado,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private List<PuntoRutaDto> ObtenerPuntosPorTipoLocal(string tipo)
+    {
+        if (puntosPorTipoCache.TryGetValue(tipo, out var puntos))
+            return puntos;
+
+        var resultado = puntosRutaCache
+            .Where(x => TipoCoincide(x.Tipo, tipo))
+            .ToList();
+
+        puntosPorTipoCache[tipo] = resultado;
+        return resultado;
+    }
+
+    private List<string> ObtenerGruposPorTipoLocal(string tipo)
+    {
+        if (gruposPorTipoCache.TryGetValue(tipo, out var grupos))
+            return grupos;
+
+        var resultado = ObtenerPuntosPorTipoLocal(tipo)
+            .Where(x => !string.IsNullOrWhiteSpace(x.Grupo))
+            .Select(x => x.Grupo!.Trim())
+            .Distinct()
+            .OrderBy(x =>
+            {
+                if (int.TryParse(x, out var numero))
+                    return numero;
+
+                return int.MaxValue;
+            })
+            .ThenBy(x => x)
+            .ToList();
+
+        gruposPorTipoCache[tipo] = resultado;
+        return resultado;
+    }
+
     private async Task MostrarProcesion()
     {
         await JS.InvokeVoidAsync("mapaRecorrido.ocultarTodosLosPuntos");
@@ -462,6 +600,8 @@
 
     private async Task FiltrarCargadores()
     {
+        _ = ObtenerPuntosPorTipoLocal("cargador");
+
         tipoSelectorGrupo = "cargador";
         filtroActivo = "cargador";
         grupoSeleccionadoActual = null;
@@ -472,6 +612,8 @@
 
     private async Task FiltrarCargadoras()
     {
+        _ = ObtenerPuntosPorTipoLocal("cargadora");
+
         tipoSelectorGrupo = "cargadora";
         filtroActivo = "cargadora";
         grupoSeleccionadoActual = null;
@@ -489,14 +631,15 @@
         await AbrirSelectorGrupo();
     }
 
-    private async Task AbrirSelectorGrupo()
+    private Task AbrirSelectorGrupo()
     {
         if (string.IsNullOrWhiteSpace(tipoSelectorGrupo))
-            return;
+            return Task.CompletedTask;
 
-        var grupos = await JS.InvokeAsync<string[]>("mapaRecorrido.obtenerGruposPorTipo", tipoSelectorGrupo);
-        gruposDisponibles = new List<string>(grupos ?? Array.Empty<string>());
+        gruposDisponibles = ObtenerGruposPorTipoLocal(tipoSelectorGrupo);
         mostrarSelectorGrupo = true;
+
+        return Task.CompletedTask;
     }
 
     private void CerrarSelectorGrupo()
@@ -633,12 +776,15 @@
             hubConnection = null;
         }
 
-        try
+        if (dependenciasMapaCargadas)
         {
-            await JS.InvokeVoidAsync("mapaRecorrido.dispose");
-        }
-        catch
-        {
+            try
+            {
+                await JS.InvokeVoidAsync("mapaRecorrido.dispose");
+            }
+            catch
+            {
+            }
         }
     }
 }
