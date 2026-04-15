@@ -1,11 +1,12 @@
 ﻿@page "/"
 @page "/recorridos"
+@using Microsoft.JSInterop
 @using NazarenoSonsonate.Shared.DTOs
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <style>
-    /* Estilos exclusivos para la página de Recorridos */
     .cards-container {
         display: flex;
         flex-direction: column;
@@ -140,7 +141,7 @@ else if (recorridos.Count == 0)
 }
 else
 {
-    <div class="cards-container">
+    <div class="cards-container" style="visibility:@(scrollRestaurado ? "visible" : "hidden")">
 
         @foreach (var recorrido in recorridos)
         {
@@ -185,6 +186,7 @@ else
     private List<RecorridoDto> recorridos = new();
     private bool cargando = true;
     private string? error;
+    private bool scrollRestaurado;
 
     protected override async Task OnInitializedAsync()
     {
@@ -214,13 +216,25 @@ else
         }
     }
 
-    private void AbrirRecorrido(int id)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!cargando && !scrollRestaurado)
+        {
+            await JS.InvokeVoidAsync("recorridosScroll.restore");
+            scrollRestaurado = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AbrirRecorrido(int id)
+    {
+        await JS.InvokeVoidAsync("recorridosScroll.save");
         Navigation.NavigateTo($"/mapa-recorrido/{id}");
     }
 
-    private void AbrirEditorAdmin(int id)
+    private async Task AbrirEditorAdmin(int id)
     {
+        await JS.InvokeVoidAsync("recorridosScroll.save");
         Navigation.NavigateTo($"/admin/recorrido-editor/{id}");
     }
 

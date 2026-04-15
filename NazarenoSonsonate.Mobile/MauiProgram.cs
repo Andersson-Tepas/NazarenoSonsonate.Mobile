@@ -23,10 +23,9 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
-        // 🔥 TU IP REAL (CELULAR FÍSICO)
-        var baseUrl = "http://192.168.1.24:5180/"; ;
+        const string baseUrl = "http://192.168.1.24:5180/";
 
-        builder.Services.AddScoped(sp => new HttpClient
+        builder.Services.AddSingleton(new HttpClient
         {
             BaseAddress = new Uri(baseUrl)
         });

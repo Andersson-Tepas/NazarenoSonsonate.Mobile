@@ -1,10 +1,5 @@
 ﻿using NazarenoSonsonate.Shared.DTOs;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http.Json;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace NazarenoSonsonate.Mobile.Services
 {
@@ -50,5 +45,4 @@ namespace NazarenoSonsonate.Mobile.Services
             return response.IsSuccessStatusCode;
         }
     }
-
 }

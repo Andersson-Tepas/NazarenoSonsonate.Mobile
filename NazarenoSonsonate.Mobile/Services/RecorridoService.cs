@@ -47,24 +47,18 @@ namespace NazarenoSonsonate.Mobile.Services
                 if (_cacheRecorridos is not null && _cacheRecorridos.Count > 0)
                     return;
 
-                var cacheLocal = Preferences.Default.Get(RecorridosCacheKey, string.Empty);
+                var listaLocal = LeerListaDesdePreferences();
 
-                if (!string.IsNullOrWhiteSpace(cacheLocal))
+                if (listaLocal is not null && listaLocal.Count > 0)
                 {
-                    var listaLocal = JsonSerializer.Deserialize<List<RecorridoDto>>(cacheLocal);
-                    if (listaLocal is not null && listaLocal.Count > 0)
-                    {
-                        _cacheRecorridos = listaLocal;
-                        SincronizarCachePorId(listaLocal);
-                        return;
-                    }
+                    CargarListaEnMemoria(listaLocal);
+                    return;
                 }
 
                 var result = await _httpClient.GetFromJsonAsync<List<RecorridoDto>>("api/recorridos")
                              ?? new List<RecorridoDto>();
 
-                _cacheRecorridos = result;
-                SincronizarCachePorId(result);
+                CargarListaEnMemoria(result);
                 GuardarListaEnPreferences(result);
             }
             finally
@@ -80,17 +74,12 @@ namespace NazarenoSonsonate.Mobile.Services
 
             if (!forzarRecarga)
             {
-                var cacheLocal = Preferences.Default.Get(RecorridosCacheKey, string.Empty);
+                var lista = LeerListaDesdePreferences();
 
-                if (!string.IsNullOrWhiteSpace(cacheLocal))
+                if (lista is not null && lista.Count > 0)
                 {
-                    var lista = JsonSerializer.Deserialize<List<RecorridoDto>>(cacheLocal);
-                    if (lista is not null && lista.Count > 0)
-                    {
-                        _cacheRecorridos = lista;
-                        SincronizarCachePorId(lista);
-                        return _cacheRecorridos;
-                    }
+                    CargarListaEnMemoria(lista);
+                    return _cacheRecorridos!;
                 }
             }
 
@@ -100,11 +89,10 @@ namespace NazarenoSonsonate.Mobile.Services
             var result = await _httpClient.GetFromJsonAsync<List<RecorridoDto>>("api/recorridos")
                          ?? new List<RecorridoDto>();
 
-            _cacheRecorridos = result;
-            SincronizarCachePorId(result);
+            CargarListaEnMemoria(result);
             GuardarListaEnPreferences(result);
 
-            return _cacheRecorridos;
+            return _cacheRecorridos!;
         }
 
         public async Task<RecorridoDto?> ObtenerRecorridoPorIdAsync(int id, bool forzarRecarga = false, bool permitirApi = true)
@@ -114,18 +102,24 @@ namespace NazarenoSonsonate.Mobile.Services
 
             if (!forzarRecarga)
             {
-                var cacheLocal = Preferences.Default.Get($"{RecorridoDetallePrefix}{id}", string.Empty);
+                var detalleLocal = LeerDetalleDesdePreferences(id);
 
-                if (!string.IsNullOrWhiteSpace(cacheLocal))
+                if (detalleLocal is not null)
                 {
-                    var item = JsonSerializer.Deserialize<RecorridoDto>(cacheLocal);
-                    if (item is not null)
-                    {
-                        _cachePorId[id] = item;
-                        ActualizarListaCache(item);
-                        return item;
-                    }
+                    _cachePorId[id] = detalleLocal;
+                    ActualizarListaCache(detalleLocal, guardarLista: false);
+                    return detalleLocal;
                 }
+
+                if (_cacheRecorridos is null || _cacheRecorridos.Count == 0)
+                {
+                    var lista = LeerListaDesdePreferences();
+                    if (lista is not null && lista.Count > 0)
+                        CargarListaEnMemoria(lista);
+                }
+
+                if (_cachePorId.TryGetValue(id, out cacheado))
+                    return cacheado;
             }
 
             if (!permitirApi)
@@ -137,7 +131,7 @@ namespace NazarenoSonsonate.Mobile.Services
             {
                 _cachePorId[id] = result;
                 ActualizarListaCache(result);
-                Preferences.Default.Set($"{RecorridoDetallePrefix}{id}", JsonSerializer.Serialize(result));
+                GuardarDetalleEnPreferences(result);
             }
 
             return result;
@@ -155,7 +149,7 @@ namespace NazarenoSonsonate.Mobile.Services
             if (_cachePorId.TryGetValue(id, out var recorrido))
             {
                 recorrido.RutaGeoJson = rutaGeoJson;
-                Preferences.Default.Set($"{RecorridoDetallePrefix}{id}", JsonSerializer.Serialize(recorrido));
+                GuardarDetalleEnPreferences(recorrido);
             }
 
             if (_cacheRecorridos is not null)
@@ -178,7 +172,7 @@ namespace NazarenoSonsonate.Mobile.Services
             {
                 recorrido.RutaGeoJson = dto.RutaGeoJson;
                 recorrido.PuntosRuta = dto.PuntosRuta;
-                Preferences.Default.Set($"{RecorridoDetallePrefix}{recorridoId}", JsonSerializer.Serialize(recorrido));
+                GuardarDetalleEnPreferences(recorrido);
             }
 
             if (_cacheRecorridos is not null)
@@ -200,34 +194,76 @@ namespace NazarenoSonsonate.Mobile.Services
             Preferences.Default.Remove(RecorridosCacheKey);
         }
 
-        private void SincronizarCachePorId(List<RecorridoDto> lista)
+        private static string ObtenerDetalleKey(int id) => $"{RecorridoDetallePrefix}{id}";
+
+        private List<RecorridoDto>? LeerListaDesdePreferences()
         {
+            var cacheLocal = Preferences.Default.Get(RecorridosCacheKey, string.Empty);
+
+            if (string.IsNullOrWhiteSpace(cacheLocal))
+                return null;
+
+            return JsonSerializer.Deserialize<List<RecorridoDto>>(cacheLocal);
+        }
+
+        private RecorridoDto? LeerDetalleDesdePreferences(int id)
+        {
+            var cacheLocal = Preferences.Default.Get(ObtenerDetalleKey(id), string.Empty);
+
+            if (string.IsNullOrWhiteSpace(cacheLocal))
+                return null;
+
+            return JsonSerializer.Deserialize<RecorridoDto>(cacheLocal);
+        }
+
+        private void CargarListaEnMemoria(List<RecorridoDto> lista)
+        {
+            _cacheRecorridos = lista;
             _cachePorId.Clear();
 
             foreach (var recorrido in lista)
             {
                 _cachePorId[recorrido.Id] = recorrido;
-                Preferences.Default.Set($"{RecorridoDetallePrefix}{recorrido.Id}", JsonSerializer.Serialize(recorrido));
             }
         }
 
-        private void ActualizarListaCache(RecorridoDto recorrido)
+        private void ActualizarListaCache(RecorridoDto recorrido, bool guardarLista = true)
         {
             if (_cacheRecorridos is null)
                 return;
 
             var index = _cacheRecorridos.FindIndex(x => x.Id == recorrido.Id);
+
             if (index >= 0)
                 _cacheRecorridos[index] = recorrido;
             else
                 _cacheRecorridos.Add(recorrido);
 
-            GuardarListaEnPreferences(_cacheRecorridos);
+            if (guardarLista)
+                GuardarListaEnPreferences(_cacheRecorridos);
+        }
+
+        private void GuardarDetalleEnPreferences(RecorridoDto recorrido)
+        {
+            var key = ObtenerDetalleKey(recorrido.Id);
+            var jsonNuevo = JsonSerializer.Serialize(recorrido);
+            var jsonActual = Preferences.Default.Get(key, string.Empty);
+
+            if (!string.Equals(jsonActual, jsonNuevo, StringComparison.Ordinal))
+            {
+                Preferences.Default.Set(key, jsonNuevo);
+            }
         }
 
         private void GuardarListaEnPreferences(List<RecorridoDto> lista)
         {
-            Preferences.Default.Set(RecorridosCacheKey, JsonSerializer.Serialize(lista));
+            var jsonNuevo = JsonSerializer.Serialize(lista);
+            var jsonActual = Preferences.Default.Get(RecorridosCacheKey, string.Empty);
+
+            if (!string.Equals(jsonActual, jsonNuevo, StringComparison.Ordinal))
+            {
+                Preferences.Default.Set(RecorridosCacheKey, jsonNuevo);
+            }
         }
     }
 }
