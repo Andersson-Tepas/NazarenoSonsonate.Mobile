@@ -5,6 +5,9 @@
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject NazarenoSonsonate.Mobile.Services.AdminService adminService
+
+@implements IDisposable
 
 <style>
     .cards-container {
@@ -169,10 +172,13 @@ else
                             Ver detalle
                         </button>
 
-                        <button class="btn-action-icon" title="Ver Mapa"
-                                @onclick="() => AbrirEditorAdmin(recorrido.Id)">
-                            &#128205;
-                        </button>
+                        @if (adminService.IsAdmin)
+                        {
+                            <button class="btn-action-icon" title="Editar Recorrido"
+                                    @onclick="() => AbrirEditorAdmin(recorrido.Id)">
+                                ✏️
+                            </button>
+                        }
                     </div>
                 </div>
 
@@ -192,6 +198,9 @@ else
     {
         try
         {
+            // 🔥 escuchar cambios del admin (TIEMPO REAL)
+            adminService.OnChange += RefreshUI;
+
             cargando = true;
             error = null;
 
@@ -214,6 +223,17 @@ else
         {
             cargando = false;
         }
+    }
+
+    // 🔥 método que refresca UI instantáneamente
+    private void RefreshUI()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        adminService.OnChange -= RefreshUI;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

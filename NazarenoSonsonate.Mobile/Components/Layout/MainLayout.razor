@@ -1,9 +1,11 @@
 ﻿@inherits LayoutComponentBase
+@inject NazarenoSonsonate.Mobile.Services.AdminService adminService
+@inject IJSRuntime JS
 
 <div class="app-container">
 
     <div class="app-header">
-        <img src="logo-insta.jpg" class="logo" />
+        <img src="logo-insta.jpg" class="logo" @onclick="DetectarToqueLogo" />
 
         <div class="page-title">
             <div class="main-title">Jesús Nazareno - Sonsonate</div>
@@ -16,3 +18,231 @@
     </div>
 
 </div>
+
+<!-- 🔐 MODAL ACTIVAR ADMIN -->
+@if (mostrarModalLogin)
+{
+    <div class="overlay">
+        <div class="modal-login">
+
+            <div class="icon-box">🛡️</div>
+            <h2>Modo Administrador</h2>
+            <p>Ingrese la clave de autoridad para gestionar las rutas sagradas.</p>
+
+            <span class="label">Contraseña</span>
+            <div class="input-group">
+                <input type="password" @bind="claveAdmin" placeholder="•••••••••">
+                <span>🔒</span>
+            </div>
+
+            <button class="btn-ingresar" @onclick="ValidarAdmin">
+                INGRESAR ➜
+            </button>
+
+            <button class="btn-close" @onclick="CerrarTodo">
+                Cerrar ventana
+            </button>
+
+            @if (!string.IsNullOrEmpty(mensajeError))
+            {
+                <p style="color:#ff6b6b;">@mensajeError</p>
+            }
+
+        </div>
+    </div>
+}
+
+<!-- ❌ MODAL DESACTIVAR ADMIN -->
+@if (mostrarModalSalir)
+{
+    <div class="overlay">
+        <div class="modal-confirm">
+
+            <div class="icon-exit">📤</div>
+            <h2>¿Desactivar modo admin?</h2>
+            <p>Se cerrará la sesión de administración y volverás a la vista pública.</p>
+
+            <button class="btn-aceptar" @onclick="ConfirmarSalida">
+                Aceptar
+            </button>
+
+            <button class="btn-cancelar" @onclick="CerrarTodo">
+                Cancelar
+            </button>
+
+        </div>
+    </div>
+}
+
+<style>
+
+    /* 🔥 SOLO bloquea scroll cuando se agrega la clase */
+    .no-scroll {
+        overflow: hidden !important;
+        height: 100vh !important;
+    }
+
+    /* OVERLAY */
+    .overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(43, 0, 42, 0.90);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        overflow: hidden;
+        touch-action: none;
+    }
+
+    /* MODALES */
+    .modal-login,
+    .modal-confirm {
+        background: linear-gradient(145deg, #3b0939, #4a154b);
+        border-radius: 24px;
+        padding: 30px;
+        width: 90%;
+        max-width: 340px;
+        text-align: center;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+        color: #fcefd6;
+        max-height: 90vh;
+        overflow: hidden;
+    }
+
+    /* ICONOS */
+    .icon-box,
+    .icon-exit {
+        background-color: #2b002a;
+        width: 60px;
+        height: 60px;
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+        font-size: 24px;
+        color: #fcefd6;
+    }
+
+    /* INPUT */
+    .label {
+        display: block;
+        text-align: left;
+        color: #d8b4fe;
+        font-size: 11px;
+        font-weight: bold;
+        margin-bottom: 8px;
+    }
+
+    .input-group {
+        background-color: #2b002a;
+        border-radius: 12px;
+        padding: 14px;
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 25px;
+    }
+
+        .input-group input {
+            background: transparent;
+            border: none;
+            color: #fcefd6;
+            outline: none;
+            width: 100%;
+        }
+
+    /* BOTONES */
+    .btn-ingresar,
+    .btn-aceptar {
+        background-color: #f7b700;
+        color: #2b002a;
+        border: none;
+        border-radius: 12px;
+        width: 100%;
+        padding: 14px;
+        font-weight: bold;
+        cursor: pointer;
+        margin-bottom: 10px;
+    }
+
+    .btn-close {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+        background: none;
+        border: none;
+        color: #fcefd6;
+        opacity: 0.7;
+        cursor: pointer;
+    }
+
+    .btn-cancelar {
+        background-color: #2b002a;
+        color: #fcefd6;
+        border: none;
+        border-radius: 12px;
+        width: 100%;
+        padding: 14px;
+        font-weight: bold;
+    }
+
+</style>
+
+@code {
+    int contadorLogo = 0;
+
+    bool mostrarModalLogin = false;
+    bool mostrarModalSalir = false;
+
+    string claveAdmin = "";
+    string mensajeError = "";
+
+    async void DetectarToqueLogo()
+    {
+        contadorLogo++;
+
+        if (contadorLogo >= 5)
+        {
+            contadorLogo = 0;
+
+            if (adminService.IsAdmin)
+                mostrarModalSalir = true;
+            else
+                mostrarModalLogin = true;
+
+            mensajeError = "";
+            claveAdmin = "";
+
+            await JS.InvokeVoidAsync("lockScroll"); // 🔥 BLOQUEA SCROLL
+        }
+    }
+
+    void ValidarAdmin()
+    {
+        if (adminService.ActivarAdmin(claveAdmin))
+        {
+            CerrarTodo();
+        }
+        else
+        {
+            mensajeError = "Clave incorrecta";
+        }
+    }
+
+    void ConfirmarSalida()
+    {
+        adminService.DesactivarAdmin();
+        CerrarTodo();
+    }
+
+    async void CerrarTodo()
+    {
+        mostrarModalLogin = false;
+        mostrarModalSalir = false;
+        mensajeError = "";
+        claveAdmin = "";
+
+        await JS.InvokeVoidAsync("unlockScroll"); // 🔥 RESTAURA SCROLL
+    }
+}
