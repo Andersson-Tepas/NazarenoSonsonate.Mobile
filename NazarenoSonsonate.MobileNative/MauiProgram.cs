@@ -10,6 +10,7 @@ namespace NazarenoSonsonate.MobileNative
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
+                .UseMauiMaps()
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -33,6 +34,10 @@ namespace NazarenoSonsonate.MobileNative
             builder.Services.AddSingleton<AdminService>();
             builder.Services.AddScoped<SignalRService>();
             builder.Services.AddScoped<UbicacionService>();
+
+            builder.Services.AddTransient<Views.SplashPage>();
+            builder.Services.AddTransient<Views.RecorridosPage>();
+            builder.Services.AddTransient<Views.MapaRecorridoPage>();
 
             return builder.Build();
         }

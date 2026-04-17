@@ -1,0 +1,134 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="NazarenoSonsonate.MobileNative.Views.RecorridosPage"
+             Title="Recorridos"
+             BackgroundColor="#1a0624"
+             NavigationPage.HasNavigationBar="False">
+
+    <Grid Padding="16" RowDefinitions="*">
+
+        <ActivityIndicator x:Name="LoadingIndicator"
+                           IsVisible="False"
+                           IsRunning="False"
+                           Color="#f7b700"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center" />
+
+        <Label x:Name="ErrorLabel"
+               IsVisible="False"
+               TextColor="#ff6b6b"
+               FontAttributes="Bold"
+               HorizontalTextAlignment="Center"
+               VerticalTextAlignment="Center"
+               HorizontalOptions="Center"
+               VerticalOptions="Center" />
+
+        <Label x:Name="EmptyLabel"
+               IsVisible="False"
+               Text="No hay recorridos disponibles."
+               TextColor="#fcefd6"
+               HorizontalTextAlignment="Center"
+               VerticalTextAlignment="Center"
+               HorizontalOptions="Center"
+               VerticalOptions="Center" />
+
+        <CollectionView x:Name="RecorridosCollection"
+                        IsVisible="False"
+                        SelectionMode="None">
+
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" ItemSpacing="20" />
+            </CollectionView.ItemsLayout>
+
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Frame BackgroundColor="#3b0939"
+                           BorderColor="#3b0939"
+                           CornerRadius="12"
+                           Padding="0"
+                           HasShadow="False"
+                           Margin="0,10,0,0">
+
+                        <VerticalStackLayout Spacing="0">
+
+                            <!-- Encabezado con imagen -->
+                            <Grid HeightRequest="150">
+                                <Image Source="{Binding ImagenDia}"
+                                       Aspect="AspectFill" />
+
+                                <BoxView Color="#992b002a" />
+
+                                <VerticalStackLayout Padding="15"
+                                                     VerticalOptions="End"
+                                                     Spacing="8">
+
+                                    <Frame BackgroundColor="#7b2cbf"
+                                           CornerRadius="20"
+                                           Padding="10,4"
+                                           HasShadow="False"
+                                           HorizontalOptions="Start">
+                                        <Label Text="Solemne"
+                                               TextColor="White"
+                                               FontSize="11" />
+                                    </Frame>
+
+                                    <Label Text="{Binding Nombre}"
+                                           FontSize="22"
+                                           TextColor="#fcefd6"
+                                           FontAttributes="Italic"
+                                           FontFamily="Georgia" />
+                                </VerticalStackLayout>
+                            </Grid>
+
+                            <!-- Contenido -->
+                            <VerticalStackLayout Padding="15" Spacing="15">
+
+                                <Label Text="{Binding Descripcion}"
+                                       FontSize="14"
+                                       TextColor="#fcefd6"
+                                       LineBreakMode="WordWrap" />
+
+                                <HorizontalStackLayout Spacing="8">
+                                <Label Text="Hora:"
+                                       FontSize="14"
+                                       TextColor="#fcefd6" />
+                                <Label Text="{Binding HoraSalida, StringFormat='Salida: {0}'}"
+                                       FontSize="13"
+                                       TextColor="#fcefd6" />
+                            </HorizontalStackLayout>
+
+                            <HorizontalStackLayout Spacing="10">
+
+                                <Button Text="Ver detalle"
+                                        BackgroundColor="#f7b700"
+                                        TextColor="#2b002a"
+                                        FontAttributes="Bold"
+                                        CornerRadius="8"
+                                        HorizontalOptions="FillAndExpand"
+                                        HeightRequest="46"
+                                        Clicked="OnVerDetalleClicked"
+                                        CommandParameter="{Binding Id}" />
+
+                                <Button x:Name="AdminButton"
+                                        Text="Editar"
+                                        BackgroundColor="Transparent"
+                                        BorderColor="#4Dfcefd6"
+                                        TextColor="#fcefd6"
+                                        WidthRequest="80"
+                                        HeightRequest="46"
+                                        CornerRadius="8"
+                                        IsVisible="{Binding MostrarBotonAdmin}"
+                                        Clicked="OnEditarClicked"
+                                        CommandParameter="{Binding Id}" />
+                            </HorizontalStackLayout>
+
+                            </VerticalStackLayout>
+
+                        </VerticalStackLayout>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>
