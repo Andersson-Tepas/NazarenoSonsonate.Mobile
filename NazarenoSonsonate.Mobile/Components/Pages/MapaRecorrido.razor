@@ -441,6 +441,7 @@
             await JS.InvokeVoidAsync("mapaRecorrido.init", "mapa-recorrido", 13.7189, -89.7242, 16);
             await JS.InvokeVoidAsync("mapaRecorrido.drawGeoJson", recorrido.RutaGeoJson);
             await JS.InvokeVoidAsync("mapaRecorrido.drawPuntosRuta", puntosRutaCache);
+            await CargarUltimasUbicacionesAsync();
             await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
 
             mapaDibujado = true;
@@ -463,6 +464,32 @@
         finally
         {
             inicializandoMapa = false;
+        }
+    }
+
+    private async Task CargarUltimasUbicacionesAsync()
+    {
+        try
+        {
+            var ultimas = await Http.GetFromJsonAsync<List<UbicacionProcesionDto>>($"api/ubicacion/ultimas/{Id}");
+
+            if (ultimas is null || ultimas.Count == 0)
+                return;
+
+            foreach (var dto in ultimas)
+            {
+                await JS.InvokeVoidAsync(
+                    "mapaRecorrido.registrarUbicacionTiempoReal",
+                    dto.TipoUnidad ?? "",
+                    dto.Latitud,
+                    dto.Longitud,
+                    dto.GrupoActual ?? "",
+                    dto.Mensaje ?? "",
+                    dto.FechaHora.ToString("g"));
+            }
+        }
+        catch
+        {
         }
     }
 
