@@ -427,6 +427,20 @@
                 Agregar chibolita
             </button>
 
+            <button class="btn-action bg-dark-purple" @onclick="EditarRutaJesus">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="#cbb4d6">
+                    <circle cx="12" cy="12" r="8"></circle>
+                </svg>
+                Editar ruta Jesús
+            </button>
+
+            <button class="btn-action bg-dark-purple" @onclick="EditarRutaVirgen">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="#f0c579">
+                    <path d="M12 2L13.8 8.2L20 10L13.8 11.8L12 18L10.2 11.8L4 10L10.2 8.2L12 2z" />
+                </svg>
+                Editar ruta Virgen
+            </button>
+
             <button class="btn-action bg-dark-purple" @onclick="DeshacerUltimoPunto">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="#f0c579">
                     <path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z" />
@@ -434,11 +448,11 @@
                 Deshacer último punto
             </button>
 
-            <button class="btn-action bg-dark-purple" @onclick="LimpiarRuta">
+            <button class="btn-action bg-dark-purple" @onclick="LimpiarRutaActiva">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="#f0c579">
                     <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
                 </svg>
-                Limpiar ruta
+                Limpiar ruta activa
             </button>
 
             <button class="btn-action bg-dark-purple" @onclick="LimpiarCheckpoints">
@@ -608,14 +622,26 @@
         mensaje = "Toca el mapa para agregar la chibolita.";
     }
 
+    private async Task EditarRutaJesus()
+    {
+        await JS.InvokeVoidAsync("mapaRecorridoAdmin.seleccionarRutaJesus");
+        mensaje = "Ahora estás editando la ruta de Jesús en morado.";
+    }
+
+    private async Task EditarRutaVirgen()
+    {
+        await JS.InvokeVoidAsync("mapaRecorridoAdmin.seleccionarRutaVirgen");
+        mensaje = "Ahora estás editando la ruta de la Virgen en amarillo.";
+    }
+
     private async Task DeshacerUltimoPunto()
     {
         await JS.InvokeVoidAsync("mapaRecorridoAdmin.deshacerUltimoPunto");
     }
 
-    private async Task LimpiarRuta()
+    private async Task LimpiarRutaActiva()
     {
-        await JS.InvokeVoidAsync("mapaRecorridoAdmin.limpiarRuta");
+        await JS.InvokeVoidAsync("mapaRecorridoAdmin.limpiarRutaActiva");
     }
 
     private async Task LimpiarCheckpoints()

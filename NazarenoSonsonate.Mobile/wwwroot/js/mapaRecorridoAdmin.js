@@ -1,6 +1,8 @@
 ﻿window.mapaRecorridoAdmin = {
     map: null,
-    polyline: null,
+    polylineJesus: null,
+    polylineVirgen: null,
+    rutaActiva: "jesus",
     markers: [],
     checkpointMarkers: [],
     checkpoints: [],
@@ -30,6 +32,42 @@
         return "Cargador";
     },
 
+    obtenerPolylineActiva: function () {
+        return this.rutaActiva === "virgen"
+            ? this.polylineVirgen
+            : this.polylineJesus;
+    },
+
+    actualizarEdicionRutas: function () {
+        if (this.polylineJesus) {
+            this.polylineJesus.setEditable(this.rutaActiva === "jesus");
+            this.polylineJesus.setOptions({
+                strokeOpacity: this.rutaActiva === "jesus" ? 1 : 0.75,
+                strokeWeight: this.rutaActiva === "jesus" ? 6 : 5
+            });
+        }
+
+        if (this.polylineVirgen) {
+            this.polylineVirgen.setEditable(this.rutaActiva === "virgen");
+            this.polylineVirgen.setOptions({
+                strokeOpacity: this.rutaActiva === "virgen" ? 1 : 0.85,
+                strokeWeight: this.rutaActiva === "virgen" ? 6 : 5
+            });
+        }
+    },
+
+    seleccionarRutaJesus: function () {
+        this.rutaActiva = "jesus";
+        this.actualizarEdicionRutas();
+        this.redibujarMarcadoresRuta();
+    },
+
+    seleccionarRutaVirgen: function () {
+        this.rutaActiva = "virgen";
+        this.actualizarEdicionRutas();
+        this.redibujarMarcadoresRuta();
+    },
+
     init: function (elementId, lat, lng, zoom, geoJsonText, checkpointsJson) {
         const element = document.getElementById(elementId);
         if (!element) return;
@@ -46,7 +84,7 @@
             gestureHandling: "greedy"
         });
 
-        this.polyline = new google.maps.Polyline({
+        this.polylineJesus = new google.maps.Polyline({
             map: this.map,
             path: [],
             strokeColor: "#8E24AA",
@@ -55,6 +93,16 @@
             editable: true
         });
 
+        this.polylineVirgen = new google.maps.Polyline({
+            map: this.map,
+            path: [],
+            strokeColor: "#FFD600",
+            strokeOpacity: 0.85,
+            strokeWeight: 5,
+            editable: false
+        });
+
+        this.rutaActiva = "jesus";
         this.markers = [];
         this.checkpointMarkers = [];
         this.checkpoints = [];
@@ -68,6 +116,8 @@
         if (checkpointsJson) {
             this.cargarCheckpoints(checkpointsJson);
         }
+
+        this.actualizarEdicionRutas();
 
         this.mapClickListener = this.map.addListener("click", (event) => {
             if (!event.latLng) return;
@@ -107,7 +157,10 @@
                 return;
             }
 
-            this.polyline.getPath().push(event.latLng);
+            const polylineActiva = this.obtenerPolylineActiva();
+            if (!polylineActiva) return;
+
+            polylineActiva.getPath().push(event.latLng);
             this.redibujarMarcadoresRuta();
         });
     },
@@ -119,34 +172,66 @@
     cargarGeoJson: function (geoJsonText) {
         try {
             const data = typeof geoJsonText === "string" ? JSON.parse(geoJsonText) : geoJsonText;
-            let coordinates = [];
 
-            if (data.type === "FeatureCollection" && data.features?.length > 0) {
-                const feature = data.features.find(f => f.geometry?.type === "LineString");
-                if (feature) {
-                    coordinates = feature.geometry.coordinates || [];
-                }
-            } else if (data.type === "Feature" && data.geometry?.type === "LineString") {
-                coordinates = data.geometry.coordinates || [];
-            } else if (data.type === "LineString") {
-                coordinates = data.coordinates || [];
-            }
-
-            const path = this.polyline.getPath();
-            path.clear();
+            const pathJesus = this.polylineJesus.getPath();
+            const pathVirgen = this.polylineVirgen.getPath();
+            pathJesus.clear();
+            pathVirgen.clear();
 
             const bounds = new google.maps.LatLngBounds();
 
-            coordinates.forEach(coord => {
-                const lng = Number(coord[0]);
-                const lat = Number(coord[1]);
+            const agregarCoordenadas = (path, coordinates) => {
+                coordinates.forEach(coord => {
+                    const lng = Number(coord[0]);
+                    const lat = Number(coord[1]);
 
-                if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-                const latLng = new google.maps.LatLng(lat, lng);
-                path.push(latLng);
-                bounds.extend(latLng);
-            });
+                    const latLng = new google.maps.LatLng(lat, lng);
+                    path.push(latLng);
+                    bounds.extend(latLng);
+                });
+            };
+
+            if (data.type === "FeatureCollection" && Array.isArray(data.features)) {
+                const lineFeatures = data.features.filter(f =>
+                    f?.geometry?.type === "LineString" && Array.isArray(f.geometry.coordinates)
+                );
+
+                if (lineFeatures.length === 1) {
+                    agregarCoordenadas(pathJesus, lineFeatures[0].geometry.coordinates || []);
+                } else {
+                    lineFeatures.forEach(feature => {
+                        const ruta =
+                            (feature.properties?.ruta || feature.properties?.tipo || feature.properties?.nombre || "")
+                                .toString()
+                                .trim()
+                                .toLowerCase();
+
+                        const color =
+                            (feature.properties?.color || "")
+                                .toString()
+                                .trim()
+                                .toLowerCase();
+
+                        const esVirgen =
+                            ruta.includes("virgen") ||
+                            color === "#ffd600" ||
+                            color === "yellow" ||
+                            color === "amarillo";
+
+                        if (esVirgen) {
+                            agregarCoordenadas(pathVirgen, feature.geometry.coordinates || []);
+                        } else {
+                            agregarCoordenadas(pathJesus, feature.geometry.coordinates || []);
+                        }
+                    });
+                }
+            } else if (data.type === "Feature" && data.geometry?.type === "LineString") {
+                agregarCoordenadas(pathJesus, data.geometry.coordinates || []);
+            } else if (data.type === "LineString") {
+                agregarCoordenadas(pathJesus, data.coordinates || []);
+            }
 
             this.redibujarMarcadoresRuta();
 
@@ -190,9 +275,10 @@
         });
         this.markers = [];
 
-        if (!this.polyline) return;
+        const polylineActiva = this.obtenerPolylineActiva();
+        if (!polylineActiva) return;
 
-        const path = this.polyline.getPath();
+        const path = polylineActiva.getPath();
 
         for (let i = 0; i < path.getLength(); i++) {
             const point = path.getAt(i);
@@ -202,12 +288,14 @@
                 map: this.map,
                 label: `${i + 1}`,
                 icon: {
-                    url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png"
+                    url: this.rutaActiva === "virgen"
+                        ? "http://maps.google.com/mapfiles/ms/icons/orange-dot.png"
+                        : "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png"
                 }
             });
 
             marker.addListener("click", () => {
-                const pathActual = this.polyline.getPath();
+                const pathActual = this.obtenerPolylineActiva().getPath();
                 if (i < pathActual.getLength()) {
                     pathActual.removeAt(i);
                     this.redibujarMarcadoresRuta();
@@ -315,9 +403,10 @@
     },
 
     deshacerUltimoPunto: function () {
-        if (!this.polyline) return;
+        const polylineActiva = this.obtenerPolylineActiva();
+        if (!polylineActiva) return;
 
-        const path = this.polyline.getPath();
+        const path = polylineActiva.getPath();
         const length = path.getLength();
 
         if (length > 0) {
@@ -326,9 +415,17 @@
         }
     },
 
+    limpiarRutaActiva: function () {
+        const polylineActiva = this.obtenerPolylineActiva();
+        if (!polylineActiva) return;
+
+        polylineActiva.setPath([]);
+        this.redibujarMarcadoresRuta();
+    },
+
     limpiarRuta: function () {
-        if (!this.polyline) return;
-        this.polyline.setPath([]);
+        if (this.polylineJesus) this.polylineJesus.setPath([]);
+        if (this.polylineVirgen) this.polylineVirgen.setPath([]);
         this.redibujarMarcadoresRuta();
     },
 
@@ -338,28 +435,56 @@
     },
 
     getGeoJson: function () {
-        if (!this.polyline) return null;
+        const obtenerCoordenadas = (polyline) => {
+            const path = polyline.getPath();
+            const coordinates = [];
 
-        const path = this.polyline.getPath();
-        const coordinates = [];
+            for (let i = 0; i < path.getLength(); i++) {
+                const point = path.getAt(i);
+                coordinates.push([point.lng(), point.lat()]);
+            }
 
-        for (let i = 0; i < path.getLength(); i++) {
-            const point = path.getAt(i);
-            coordinates.push([point.lng(), point.lat()]);
+            return coordinates;
+        };
+
+        const coordsJesus = this.polylineJesus ? obtenerCoordenadas(this.polylineJesus) : [];
+        const coordsVirgen = this.polylineVirgen ? obtenerCoordenadas(this.polylineVirgen) : [];
+
+        const features = [];
+
+        if (coordsJesus.length > 0) {
+            features.push({
+                type: "Feature",
+                properties: {
+                    ruta: "jesus",
+                    nombre: "Jesus",
+                    color: "#8E24AA"
+                },
+                geometry: {
+                    type: "LineString",
+                    coordinates: coordsJesus
+                }
+            });
+        }
+
+        if (coordsVirgen.length > 0) {
+            features.push({
+                type: "Feature",
+                properties: {
+                    ruta: "virgen",
+                    nombre: "Virgen",
+                    color: "#FFD600"
+                },
+                geometry: {
+                    type: "LineString",
+                    coordinates: coordsVirgen
+                }
+            });
         }
 
         return {
             type: "FeatureCollection",
-            features: [
-                {
-                    type: "Feature",
-                    properties: {},
-                    geometry: {
-                        type: "LineString",
-                        coordinates: coordinates
-                    }
-                }
-            ]
+            features: features
         };
     },
 
@@ -399,14 +524,21 @@
         });
         this.checkpointMarkers = [];
 
-        if (this.polyline) {
-            google.maps.event.clearInstanceListeners(this.polyline);
-            this.polyline.setMap(null);
-            this.polyline = null;
+        if (this.polylineJesus) {
+            google.maps.event.clearInstanceListeners(this.polylineJesus);
+            this.polylineJesus.setMap(null);
+            this.polylineJesus = null;
+        }
+
+        if (this.polylineVirgen) {
+            google.maps.event.clearInstanceListeners(this.polylineVirgen);
+            this.polylineVirgen.setMap(null);
+            this.polylineVirgen = null;
         }
 
         this.checkpoints = [];
         this.modoCheckpoint = false;
+        this.rutaActiva = "jesus";
 
         if (limpiarElemento && this.map && this.map.getDiv) {
             const div = this.map.getDiv();

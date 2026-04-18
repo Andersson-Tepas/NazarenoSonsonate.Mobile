@@ -156,10 +156,29 @@
 
         this.dataLayer.addGeoJson(data);
 
-        this.dataLayer.setStyle({
-            strokeColor: "#6A1B9A",
-            strokeWeight: 5,
-            fillOpacity: 0
+        this.dataLayer.setStyle((feature) => {
+            const ruta = (feature.getProperty("ruta") || feature.getProperty("tipo") || feature.getProperty("nombre") || "")
+                .toString()
+                .trim()
+                .toLowerCase();
+
+            const colorProp = (feature.getProperty("color") || "")
+                .toString()
+                .trim()
+                .toLowerCase();
+
+            const esVirgen =
+                ruta.includes("virgen") ||
+                colorProp === "#ffd600" ||
+                colorProp === "amarillo" ||
+                colorProp === "yellow";
+
+            return {
+                strokeColor: esVirgen ? "#FFD600" : "#6A1B9A",
+                strokeWeight: esVirgen ? 5 : 5,
+                strokeOpacity: esVirgen ? 1 : 1,
+                fillOpacity: 0
+            };
         });
 
         const bounds = new google.maps.LatLngBounds();
@@ -236,7 +255,7 @@
 
         this.iconoJesusCache = {
             url: "images/jesus_icon.png",
-            scaledSize: new google.maps.Size(28, 28), // 🔥 MÁS PEQUEÑO
+            scaledSize: new google.maps.Size(28, 28),
             size: new google.maps.Size(28, 28),
             anchor: new google.maps.Point(14, 14)
         };
@@ -249,7 +268,7 @@
 
         this.iconoVirgenCache = {
             url: "images/virgen_icon.png",
-            scaledSize: new google.maps.Size(28, 28), // 🔥 MÁS PEQUEÑO
+            scaledSize: new google.maps.Size(28, 28),
             size: new google.maps.Size(28, 28),
             anchor: new google.maps.Point(14, 14)
         };
