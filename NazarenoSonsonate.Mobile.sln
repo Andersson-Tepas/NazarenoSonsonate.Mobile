@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NazarenoSonsonate.Api", "Na
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NazarenoSonsonate.Shared", "NazarenoSonsonate.Shared\NazarenoSonsonate.Shared.csproj", "{ACF64401-08A3-404C-A05E-639A103A6E07}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NazarenoSonsonate.Nativo", "NazarenoSonsonate.Nativo\NazarenoSonsonate.Nativo.csproj", "{AAE89120-F1AE-418B-A2AF-780953784F00}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,6 +31,11 @@ Global
 		{ACF64401-08A3-404C-A05E-639A103A6E07}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ACF64401-08A3-404C-A05E-639A103A6E07}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{ACF64401-08A3-404C-A05E-639A103A6E07}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AAE89120-F1AE-418B-A2AF-780953784F00}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AAE89120-F1AE-418B-A2AF-780953784F00}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AAE89120-F1AE-418B-A2AF-780953784F00}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{AAE89120-F1AE-418B-A2AF-780953784F00}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AAE89120-F1AE-418B-A2AF-780953784F00}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

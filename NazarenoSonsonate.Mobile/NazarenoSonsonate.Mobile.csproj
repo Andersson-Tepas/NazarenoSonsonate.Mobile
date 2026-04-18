@@ -1,7 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
 	<PropertyGroup>
-		<TargetFrameworks>net8.0-android</TargetFrameworks>
+		<TargetFrameworks>net8.0-android;net8.0-ios;net8.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041.0</TargetFrameworks>
 
 		<OutputType>Exe</OutputType>
 		<RootNamespace>NazarenoSonsonate.Mobile</RootNamespace>
@@ -11,27 +12,35 @@
 		<EnableDefaultCssItems>false</EnableDefaultCssItems>
 		<Nullable>enable</Nullable>
 
+		<!-- Para ejecutar Windows sin error de MSIX -->
+		<WindowsPackageType>None</WindowsPackageType>
+
 		<ApplicationTitle>AHJN Sonsonate</ApplicationTitle>
 		<ApplicationId>com.companyname.nazarenosonsonate.mobile</ApplicationId>
 
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 
-		<SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>
+		<!-- Versiones mínimas por plataforma -->
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">11.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">13.1</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<MauiIcon Include="Resources\\AppIcon\\appicon.jpg" Color="White" ForegroundScale="0.65" />
-		<!-- <MauiSplashScreen Include="Resources\\Splash\\splash.jpg" Color="#512BD4" BaseSize="128,128" /> -->
-		<MauiImage Include="Resources\\Images\\*" />
-		<MauiImage Update="Resources\\Images\\dotnet_bot.svg" BaseSize="168,208" />
-		<MauiFont Include="Resources\\Fonts\\*" />
-		<MauiAsset Include="Resources\\Raw\\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+		<MauiIcon Include="Resources\AppIcon\appicon.jpg" Color="White" ForegroundScale="0.65" />
+		<!-- <MauiSplashScreen Include="Resources\Splash\splash.jpg" Color="#512BD4" BaseSize="128,128" /> -->
+		<MauiImage Include="Resources\Images\*" />
+		<MauiImage Update="Resources\Images\dotnet_bot.svg" BaseSize="168,208" />
+		<MauiFont Include="Resources\Fonts\*" />
+		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Remove="Resources\\AppIcon\\appicon.jpg" />
-		<None Remove="Resources\\Splash\\splash.jpg" />
+		<None Remove="Resources\AppIcon\appicon.jpg" />
+		<None Remove="Resources\Splash\splash.jpg" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -43,7 +52,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\\NazarenoSonsonate.Shared\\NazarenoSonsonate.Shared.csproj" />
+		<ProjectReference Include="..\NazarenoSonsonate.Shared\NazarenoSonsonate.Shared.csproj" />
 	</ItemGroup>
 
 </Project>
