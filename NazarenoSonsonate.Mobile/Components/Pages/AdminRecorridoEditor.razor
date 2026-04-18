@@ -4,6 +4,7 @@
 @using NazarenoSonsonate.Shared.DTOs
 @inject IJSRuntime JS
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
+@inject NazarenoSonsonate.Mobile.Services.UbicacionTrackingService TrackingService
 @inject NavigationManager Navigation
 @implements IAsyncDisposable
 
@@ -112,6 +113,111 @@
         overflow: hidden;
         box-shadow: 0 4px 15px rgba(0,0,0,0.4);
     }
+
+    .tracking-card {
+        background-color: #211029;
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .tracking-title {
+        color: #f0c579;
+        font-family: Georgia, 'Times New Roman', Times, serif;
+        font-style: italic;
+        font-size: 24px;
+        margin: 0;
+    }
+
+    .tracking-subtitle {
+        color: #cbb4d6;
+        font-size: 13px;
+        margin: 0;
+    }
+
+    .tracking-row {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .tracking-label {
+        font-size: 12px;
+        color: #d6bdec;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 700;
+    }
+
+    .tracking-select {
+        width: 100%;
+        border: 1px solid #5c2f73;
+        border-radius: 12px;
+        background-color: #170318;
+        color: #fcefd6;
+        padding: 14px;
+        font-size: 15px;
+        outline: none;
+    }
+
+    .tracking-status-box {
+        background-color: #170318;
+        border: 1px solid #3f204f;
+        border-radius: 12px;
+        padding: 14px;
+        display: grid;
+        gap: 8px;
+    }
+
+    .tracking-status-line {
+        font-size: 13px;
+        color: #fcefd6;
+    }
+
+    .tracking-status-value {
+        font-weight: 700;
+        color: #f0c579;
+    }
+
+    .tracking-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+
+    .btn-track-start {
+        background-color: #1f8f4e;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 16px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+    }
+
+    .btn-track-stop {
+        background-color: #8f1f2d;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 16px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+    }
+
+        .btn-track-start:disabled,
+        .btn-track-stop:disabled,
+        .tracking-select:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
 
     .action-grid {
         display: grid;
@@ -262,6 +368,57 @@
 
         <div id="mapa-admin" class="map-container"></div>
 
+        <div class="tracking-card">
+            <h3 class="tracking-title">Rastreo en vivo</h3>
+            <p class="tracking-subtitle">Desde aquí iniciás el envío GPS del anda seleccionada cada 5 segundos.</p>
+
+            <div class="tracking-row">
+                <label class="tracking-label">Unidad procesional</label>
+                <select class="tracking-select" @bind="tipoUnidadSeleccionada" disabled="@rastreoActivo">
+                    <option value="JesusNazareno">Anda Jesús Nazareno</option>
+                    <option value="VirgenMaria">Anda Virgen María</option>
+                </select>
+            </div>
+
+            <div class="tracking-status-box">
+                <div class="tracking-status-line">
+                    Estado:
+                    <span class="tracking-status-value">@estadoRastreo</span>
+                </div>
+
+                <div class="tracking-status-line">
+                    Unidad activa:
+                    <span class="tracking-status-value">@ObtenerNombreUnidad(tipoUnidadSeleccionada)</span>
+                </div>
+
+                <div class="tracking-status-line">
+                    Último envío:
+                    <span class="tracking-status-value">@ultimaHoraEnvioTexto</span>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(errorRastreo))
+                {
+                    <div class="tracking-status-line" style="color:#ffb3b3;">
+                        @errorRastreo
+                    </div>
+                }
+            </div>
+
+            <div class="tracking-actions">
+                <button class="btn-track-start"
+                        @onclick="IniciarRastreo"
+                        disabled="@rastreoActivo">
+                    Iniciar rastreo
+                </button>
+
+                <button class="btn-track-stop"
+                        @onclick="DetenerRastreo"
+                        disabled="@(!rastreoActivo)">
+                    Detener rastreo
+                </button>
+            </div>
+        </div>
+
         <div class="action-grid">
             <button class="btn-action btn-full-width bg-purple" @onclick="ActivarCheckpoint">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
@@ -281,7 +438,7 @@
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="#f0c579">
                     <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
                 </svg>
-                Limpiar Ruta
+                Limpiar ruta
             </button>
 
             <button class="btn-action bg-dark-purple" @onclick="LimpiarCheckpoints">
@@ -325,6 +482,24 @@
     private bool mapaInicializado;
     private bool dependenciasMapaCargadas;
 
+    private string tipoUnidadSeleccionada = "JesusNazareno";
+
+    private bool rastreoActivo => TrackingService.IsTracking;
+    private string estadoRastreo => TrackingService.Estado;
+    private string? errorRastreo => TrackingService.Error;
+    private DateTime? ultimaHoraEnvio => TrackingService.UltimaHoraEnvio;
+    private string ultimaHoraEnvioTexto => ultimaHoraEnvio?.ToString("g") ?? "Sin envíos todavía";
+
+    protected override void OnInitialized()
+    {
+        TrackingService.OnStateChanged += TrackingStateChanged;
+    }
+
+    private void TrackingStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         try
@@ -335,6 +510,11 @@
             mapaInicializado = false;
 
             recorrido = await RecorridoService.ObtenerRecorridoPorIdAsync(Id);
+
+            if (TrackingService.IsTracking && TrackingService.RecorridoId == Id)
+            {
+                tipoUnidadSeleccionada = TrackingService.TipoUnidad;
+            }
         }
         catch (Exception ex)
         {
@@ -476,6 +656,23 @@
         }
     }
 
+    private async Task IniciarRastreo()
+    {
+        await TrackingService.StartAsync(Id, tipoUnidadSeleccionada);
+    }
+
+    private async Task DetenerRastreo()
+    {
+        await TrackingService.StopAsync();
+    }
+
+    private string ObtenerNombreUnidad(string tipoUnidad)
+    {
+        return tipoUnidad == "VirgenMaria"
+            ? "Anda Virgen María"
+            : "Anda Jesús Nazareno";
+    }
+
     private void VolverARecorridos()
     {
         Navigation.NavigateTo("/recorridos");
@@ -483,6 +680,8 @@
 
     public async ValueTask DisposeAsync()
     {
+        TrackingService.OnStateChanged -= TrackingStateChanged;
+
         if (dependenciasMapaCargadas)
         {
             try

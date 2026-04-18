@@ -31,10 +31,11 @@ public static class MauiProgram
         });
 
         builder.Services.AddSingleton<RecorridoService>();
+        builder.Services.AddSingleton<UbicacionTrackingService>();
         builder.Services.AddSingleton<PuntoRutaCacheService>();
         builder.Services.AddSingleton<AdminService>();
-        builder.Services.AddScoped<SignalRService>();
-        builder.Services.AddScoped<UbicacionService>();
+        builder.Services.AddSingleton<SignalRService>();
+        builder.Services.AddSingleton<UbicacionService>();
 
         return builder.Build();
     }

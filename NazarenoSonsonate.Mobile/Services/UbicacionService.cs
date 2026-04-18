@@ -12,7 +12,11 @@ namespace NazarenoSonsonate.Mobile.Services
             _httpClient = httpClient;
         }
 
-        public async Task<bool> EnviarUbicacionActualAsync(int recorridoId, string? grupoActual = null, string? mensaje = null)
+        public async Task<bool> EnviarUbicacionActualAsync(
+            int recorridoId,
+            string tipoUnidad,
+            string? grupoActual = null,
+            string? mensaje = null)
         {
             var permiso = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
 
@@ -37,8 +41,9 @@ namespace NazarenoSonsonate.Mobile.Services
                 Latitud = location.Latitude,
                 Longitud = location.Longitude,
                 FechaHora = DateTime.Now,
-                GrupoActual = grupoActual ?? "Grupo central",
-                Mensaje = mensaje ?? "Ubicación enviada desde dispositivo autorizado"
+                GrupoActual = grupoActual ?? "",
+                Mensaje = mensaje ?? "Ubicación enviada desde dispositivo autorizado",
+                TipoUnidad = tipoUnidad
             };
 
             var response = await _httpClient.PostAsJsonAsync("api/ubicacion", dto);

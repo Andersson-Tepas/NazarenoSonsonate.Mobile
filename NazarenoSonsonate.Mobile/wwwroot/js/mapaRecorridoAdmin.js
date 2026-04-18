@@ -5,6 +5,8 @@
     checkpointMarkers: [],
     checkpoints: [],
     modoCheckpoint: false,
+    infoWindowCheckpoint: null,
+    mapClickListener: null,
 
     esperarGoogleMaps: async function () {
         let intentos = 0;
@@ -32,13 +34,16 @@
         const element = document.getElementById(elementId);
         if (!element) return;
 
+        this.dispose(false);
+
         this.map = new google.maps.Map(element, {
             center: { lat: lat, lng: lng },
             zoom: zoom,
             mapTypeId: "roadmap",
             streetViewControl: false,
             fullscreenControl: false,
-            mapTypeControl: false
+            mapTypeControl: false,
+            gestureHandling: "greedy"
         });
 
         this.polyline = new google.maps.Polyline({
@@ -54,6 +59,7 @@
         this.checkpointMarkers = [];
         this.checkpoints = [];
         this.modoCheckpoint = false;
+        this.infoWindowCheckpoint = new google.maps.InfoWindow();
 
         if (geoJsonText) {
             this.cargarGeoJson(geoJsonText);
@@ -63,7 +69,7 @@
             this.cargarCheckpoints(checkpointsJson);
         }
 
-        this.map.addListener("click", (event) => {
+        this.mapClickListener = this.map.addListener("click", (event) => {
             if (!event.latLng) return;
 
             if (this.modoCheckpoint) {
@@ -112,7 +118,7 @@
 
     cargarGeoJson: function (geoJsonText) {
         try {
-            const data = JSON.parse(geoJsonText);
+            const data = typeof geoJsonText === "string" ? JSON.parse(geoJsonText) : geoJsonText;
             let coordinates = [];
 
             if (data.type === "FeatureCollection" && data.features?.length > 0) {
@@ -132,8 +138,11 @@
             const bounds = new google.maps.LatLngBounds();
 
             coordinates.forEach(coord => {
-                const lng = coord[0];
-                const lat = coord[1];
+                const lng = Number(coord[0]);
+                const lat = Number(coord[1]);
+
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
                 const latLng = new google.maps.LatLng(lat, lng);
                 path.push(latLng);
                 bounds.extend(latLng);
@@ -151,14 +160,16 @@
 
     cargarCheckpoints: function (checkpointsJson) {
         try {
-            const puntos = JSON.parse(checkpointsJson);
+            const puntos = typeof checkpointsJson === "string"
+                ? JSON.parse(checkpointsJson)
+                : checkpointsJson;
 
             this.checkpoints = Array.isArray(puntos)
                 ? puntos.map(p => ({
                     Id: p.Id ?? p.id ?? 0,
                     RecorridoId: p.RecorridoId ?? p.recorridoId ?? 0,
-                    Latitud: p.Latitud ?? p.latitud ?? 0,
-                    Longitud: p.Longitud ?? p.longitud ?? 0,
+                    Latitud: Number(p.Latitud ?? p.latitud ?? 0),
+                    Longitud: Number(p.Longitud ?? p.longitud ?? 0),
                     Orden: p.Orden ?? p.orden ?? 0,
                     Referencia: p.Referencia ?? p.referencia ?? "",
                     Grupo: p.Grupo ?? p.grupo ?? "",
@@ -173,8 +184,13 @@
     },
 
     redibujarMarcadoresRuta: function () {
-        this.markers.forEach(m => m.setMap(null));
+        this.markers.forEach(m => {
+            google.maps.event.clearInstanceListeners(m);
+            m.setMap(null);
+        });
         this.markers = [];
+
+        if (!this.polyline) return;
 
         const path = this.polyline.getPath();
 
@@ -192,8 +208,10 @@
 
             marker.addListener("click", () => {
                 const pathActual = this.polyline.getPath();
-                pathActual.removeAt(i);
-                this.redibujarMarcadoresRuta();
+                if (i < pathActual.getLength()) {
+                    pathActual.removeAt(i);
+                    this.redibujarMarcadoresRuta();
+                }
             });
 
             this.markers.push(marker);
@@ -217,7 +235,10 @@
     },
 
     redibujarCheckpoints: function () {
-        this.checkpointMarkers.forEach(m => m.setMap(null));
+        this.checkpointMarkers.forEach(m => {
+            google.maps.event.clearInstanceListeners(m);
+            m.setMap(null);
+        });
         this.checkpointMarkers = [];
 
         const iconoGrupo = this.crearIconoGrupo();
@@ -250,10 +271,6 @@
                     ${punto.Referencia ? `<br/>Referencia: ${punto.Referencia}` : ""}
                 </div>`;
 
-            const info = new google.maps.InfoWindow({
-                content: construirContenido()
-            });
-
             marker.addListener("click", () => {
                 const nuevaReferencia = prompt("Editar referencia:", punto.Referencia || "");
                 if (nuevaReferencia === null) return;
@@ -276,11 +293,11 @@
                 });
 
                 marker.setTitle(`${punto.Tipo} ${punto.Grupo || punto.Referencia || `Punto ${index + 1}`}`);
-                info.setContent(construirContenido());
             });
 
             marker.addListener("dblclick", () => {
-                info.open(this.map, marker);
+                this.infoWindowCheckpoint.setContent(construirContenido());
+                this.infoWindowCheckpoint.open(this.map, marker);
             });
 
             marker.addListener("dragend", (event) => {
@@ -357,5 +374,47 @@
             Grupo: p.Grupo || "",
             Tipo: this.normalizarTipo(p.Tipo || "Cargador")
         }));
+    },
+
+    dispose: function (limpiarElemento = true) {
+        if (this.infoWindowCheckpoint) {
+            this.infoWindowCheckpoint.close();
+            this.infoWindowCheckpoint = null;
+        }
+
+        if (this.mapClickListener) {
+            google.maps.event.removeListener(this.mapClickListener);
+            this.mapClickListener = null;
+        }
+
+        this.markers.forEach(m => {
+            google.maps.event.clearInstanceListeners(m);
+            m.setMap(null);
+        });
+        this.markers = [];
+
+        this.checkpointMarkers.forEach(m => {
+            google.maps.event.clearInstanceListeners(m);
+            m.setMap(null);
+        });
+        this.checkpointMarkers = [];
+
+        if (this.polyline) {
+            google.maps.event.clearInstanceListeners(this.polyline);
+            this.polyline.setMap(null);
+            this.polyline = null;
+        }
+
+        this.checkpoints = [];
+        this.modoCheckpoint = false;
+
+        if (limpiarElemento && this.map && this.map.getDiv) {
+            const div = this.map.getDiv();
+            if (div) {
+                div.innerHTML = "";
+            }
+        }
+
+        this.map = null;
     }
 };

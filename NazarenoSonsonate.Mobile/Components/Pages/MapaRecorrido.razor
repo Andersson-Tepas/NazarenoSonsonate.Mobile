@@ -285,7 +285,7 @@
     }
 
     <nav class="bottom-nav">
-        <div class="nav-item @(string.IsNullOrWhiteSpace(filtroActivo) && string.IsNullOrWhiteSpace(tipoSelectorGrupo) ? "active" : "")" @onclick="MostrarProcesion">
+        <div class="nav-item @(mostrandoProcesion ? "active" : "")" @onclick="MostrarProcesion">
             <div class="nav-icon">
                 <svg viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="10"></circle>
@@ -349,6 +349,7 @@
     private bool tiempoRealIniciado;
     private bool dependenciasMapaCargadas;
     private bool disposed;
+    private bool mostrandoProcesion = false;
 
     private HubConnection? hubConnection;
     private string estadoTiempoReal = "UBICACIÓN EN VIVO";
@@ -377,6 +378,7 @@
             gruposDisponibles = new();
             grupoSeleccionadoActual = null;
             tipoSelectorGrupo = "";
+            mostrandoProcesion = false;
 
             puntosRutaCache = new();
             puntosPorTipoCache.Clear();
@@ -439,6 +441,7 @@
             await JS.InvokeVoidAsync("mapaRecorrido.init", "mapa-recorrido", 13.7189, -89.7242, 16);
             await JS.InvokeVoidAsync("mapaRecorrido.drawGeoJson", recorrido.RutaGeoJson);
             await JS.InvokeVoidAsync("mapaRecorrido.drawPuntosRuta", puntosRutaCache);
+            await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
 
             mapaDibujado = true;
 
@@ -589,6 +592,9 @@
 
     private async Task MostrarProcesion()
     {
+        mostrandoProcesion = true;
+
+        await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
         await JS.InvokeVoidAsync("mapaRecorrido.ocultarTodosLosPuntos");
 
         filtroActivo = "";
@@ -600,6 +606,9 @@
 
     private async Task FiltrarCargadores()
     {
+        mostrandoProcesion = false;
+        await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
+
         _ = ObtenerPuntosPorTipoLocal("cargador");
 
         tipoSelectorGrupo = "cargador";
@@ -612,6 +621,9 @@
 
     private async Task FiltrarCargadoras()
     {
+        mostrandoProcesion = false;
+        await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
+
         _ = ObtenerPuntosPorTipoLocal("cargadora");
 
         tipoSelectorGrupo = "cargadora";
@@ -624,6 +636,9 @@
 
     private async Task FiltrarGrupo()
     {
+        mostrandoProcesion = false;
+        await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
+
         if (string.IsNullOrWhiteSpace(tipoSelectorGrupo))
             return;
 
@@ -698,18 +713,24 @@
             return Task.CompletedTask;
         };
 
-        hubConnection.On<UbicacionProcesionDto>("UbicacionActualizada", async dto =>
+        hubConnection.On<UbicacionProcesionDto>("RecibirUbicacion", async dto =>
         {
             if (disposed || dto.RecorridoId != Id)
                 return;
 
             await JS.InvokeVoidAsync(
-                "mapaRecorrido.actualizarMarcadorTiempoReal",
+                "mapaRecorrido.registrarUbicacionTiempoReal",
+                dto.TipoUnidad ?? "",
                 dto.Latitud,
                 dto.Longitud,
                 dto.GrupoActual ?? "",
                 dto.Mensaje ?? "",
                 dto.FechaHora.ToString("g"));
+
+            if (mostrandoProcesion)
+            {
+                await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
+            }
         });
 
         await hubConnection.StartAsync();
@@ -723,6 +744,9 @@
     {
         try
         {
+            mostrandoProcesion = false;
+            await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
+
             var permiso = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
 
             if (permiso != PermissionStatus.Granted)

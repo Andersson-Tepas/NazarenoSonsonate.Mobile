@@ -1,7 +1,7 @@
 ﻿window.mapaRecorrido = {
     map: null,
     dataLayer: null,
-    marcadorTiempoReal: null,
+    marcadoresTiempoReal: {},
     marcadorUsuario: null,
     infoTiempoReal: null,
     infoPuntos: null,
@@ -17,8 +17,12 @@
     tipoSeleccionado: null,
 
     iconoGrupoCache: null,
-    iconoProcesionCache: null,
+    iconoJesusCache: null,
+    iconoVirgenCache: null,
     iconoUsuarioCache: null,
+
+    andasVisibles: true,
+    ubicacionesTiempoReal: {},
 
     esperarGoogleMaps: async function () {
         let intentos = 0;
@@ -50,7 +54,7 @@
         });
 
         this.dataLayer = new google.maps.Data({ map: this.map });
-        this.marcadorTiempoReal = null;
+        this.marcadoresTiempoReal = {};
         this.marcadorUsuario = null;
         this.infoTiempoReal = new google.maps.InfoWindow();
         this.infoPuntos = new google.maps.InfoWindow();
@@ -66,8 +70,12 @@
         this.tipoSeleccionado = null;
 
         this.iconoGrupoCache = null;
-        this.iconoProcesionCache = null;
+        this.iconoJesusCache = null;
+        this.iconoVirgenCache = null;
         this.iconoUsuarioCache = null;
+
+        this.andasVisibles = true;
+        this.ubicacionesTiempoReal = {};
     },
 
     dispose: function (limpiarElemento = true) {
@@ -93,10 +101,15 @@
             }
         }
 
-        if (this.marcadorTiempoReal) {
-            google.maps.event.clearInstanceListeners(this.marcadorTiempoReal);
-            this.marcadorTiempoReal.setMap(null);
-            this.marcadorTiempoReal = null;
+        if (this.marcadoresTiempoReal) {
+            Object.values(this.marcadoresTiempoReal).forEach(marker => {
+                if (marker) {
+                    google.maps.event.clearInstanceListeners(marker);
+                    marker.setMap(null);
+                }
+            });
+
+            this.marcadoresTiempoReal = {};
         }
 
         if (this.marcadorUsuario) {
@@ -115,10 +128,12 @@
         this.todosLosPuntos = [];
         this.puntosIndexados = [];
         this.visiblesActuales = [];
+        this.ubicacionesTiempoReal = {};
 
         this.filtroActual = "ninguno";
         this.grupoSeleccionado = null;
         this.tipoSeleccionado = null;
+        this.andasVisibles = true;
 
         if (limpiarElemento && this.map && this.map.getDiv) {
             const div = this.map.getDiv();
@@ -216,34 +231,46 @@
         return this.iconoGrupoCache;
     },
 
-    obtenerIconoProcesion: function () {
-        if (this.iconoProcesionCache) return this.iconoProcesionCache;
+    obtenerIconoJesus: function () {
+        if (this.iconoJesusCache) return this.iconoJesusCache;
 
-        this.iconoProcesionCache = {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 10,
-            fillColor: "#6A1B9A",
-            fillOpacity: 1,
-            strokeColor: "#ffffff",
-            strokeWeight: 3
+        this.iconoJesusCache = {
+            url: "images/jesus_icon.png",
+            scaledSize: new google.maps.Size(28, 28), // 🔥 MÁS PEQUEÑO
+            size: new google.maps.Size(28, 28),
+            anchor: new google.maps.Point(14, 14)
         };
 
-        return this.iconoProcesionCache;
+        return this.iconoJesusCache;
     },
 
-    obtenerIconoUsuario: function () {
-        if (this.iconoUsuarioCache) return this.iconoUsuarioCache;
+    obtenerIconoVirgen: function () {
+        if (this.iconoVirgenCache) return this.iconoVirgenCache;
 
-        this.iconoUsuarioCache = {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 9,
-            fillColor: "#1E88E5",
-            fillOpacity: 1,
-            strokeColor: "#ffffff",
-            strokeWeight: 3
+        this.iconoVirgenCache = {
+            url: "images/virgen_icon.png",
+            scaledSize: new google.maps.Size(28, 28), // 🔥 MÁS PEQUEÑO
+            size: new google.maps.Size(28, 28),
+            anchor: new google.maps.Point(14, 14)
         };
 
-        return this.iconoUsuarioCache;
+        return this.iconoVirgenCache;
+    },
+
+    obtenerIconoUnidad: function (tipoUnidad) {
+        const tipo = (tipoUnidad || "").toString().trim();
+
+        if (tipo === "VirgenMaria") {
+            return this.obtenerIconoVirgen();
+        }
+
+        return this.obtenerIconoJesus();
+    },
+
+    obtenerTituloUnidad: function (tipoUnidad) {
+        return tipoUnidad === "VirgenMaria"
+            ? "Anda Virgen María"
+            : "Anda Jesús Nazareno";
     },
 
     limpiarPuntosRuta: function () {
@@ -504,33 +531,82 @@
         return true;
     },
 
-    actualizarMarcadorTiempoReal: function (lat, lng, grupoActual, mensaje, fechaHora) {
-        if (!this.map) return;
+    registrarUbicacionTiempoReal: function (tipoUnidad, lat, lng, grupoActual, mensaje, fechaHora) {
+        if (!tipoUnidad) return;
 
-        const position = { lat, lng };
+        this.ubicacionesTiempoReal[tipoUnidad] = {
+            tipoUnidad,
+            lat,
+            lng,
+            grupoActual,
+            mensaje,
+            fechaHora
+        };
 
-        if (!this.marcadorTiempoReal) {
-            this.marcadorTiempoReal = new google.maps.Marker({
+        if (this.andasVisibles) {
+            this.renderizarAnda(tipoUnidad);
+        }
+    },
+
+    renderizarAnda: function (tipoUnidad) {
+        if (!this.map || !tipoUnidad) return;
+
+        const data = this.ubicacionesTiempoReal[tipoUnidad];
+        if (!data) return;
+
+        const position = { lat: data.lat, lng: data.lng };
+        let marker = this.marcadoresTiempoReal[tipoUnidad];
+        const titulo = this.obtenerTituloUnidad(tipoUnidad);
+
+        if (!marker) {
+            marker = new google.maps.Marker({
                 position,
                 map: this.map,
-                title: grupoActual || "Procesión",
-                icon: this.obtenerIconoProcesion(),
+                title: titulo,
+                icon: this.obtenerIconoUnidad(tipoUnidad),
                 zIndex: 1100,
                 optimized: true
             });
 
-            this.marcadorTiempoReal.addListener("click", () => {
-                this.infoTiempoReal.open(this.map, this.marcadorTiempoReal);
-            });
-        } else {
-            this.marcadorTiempoReal.setPosition(position);
-            this.marcadorTiempoReal.setTitle(grupoActual || "Procesión");
-        }
+            marker.addListener("click", () => {
+                const actual = this.ubicacionesTiempoReal[tipoUnidad];
 
-        this.infoTiempoReal.setContent(`<div>
-            <strong>${grupoActual || "Procesión"}</strong><br/>
-            ${mensaje || ""}
-        </div>`);
+                this.infoTiempoReal.setContent(`
+                    <div style="min-width:170px">
+                        <strong>${titulo}</strong><br/>
+                        ${actual?.grupoActual || ""}${actual?.grupoActual ? "<br/>" : ""}
+                        ${actual?.mensaje || ""}${actual?.mensaje ? "<br/>" : ""}
+                        ${actual?.fechaHora || ""}
+                    </div>
+                `);
+
+                this.infoTiempoReal.open(this.map, marker);
+            });
+
+            this.marcadoresTiempoReal[tipoUnidad] = marker;
+        } else {
+            marker.setPosition(position);
+            marker.setTitle(titulo);
+            marker.setMap(this.map);
+        }
+    },
+
+    ocultarAndasTiempoReal: function () {
+        this.andasVisibles = false;
+
+        Object.values(this.marcadoresTiempoReal).forEach(marker => {
+            if (marker) {
+                marker.setMap(null);
+            }
+        });
+    },
+
+    mostrarAndasTiempoReal: function () {
+        this.andasVisibles = true;
+
+        Object.keys(this.ubicacionesTiempoReal).forEach(tipoUnidad => {
+            this.renderizarAnda(tipoUnidad);
+        });
     },
 
     mostrarMiUbicacion: function (lat, lng, centrar = false) {
@@ -554,5 +630,20 @@
         if (centrar) {
             this.map.panTo(position);
         }
+    },
+
+    obtenerIconoUsuario: function () {
+        if (this.iconoUsuarioCache) return this.iconoUsuarioCache;
+
+        this.iconoUsuarioCache = {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 9,
+            fillColor: "#1E88E5",
+            fillOpacity: 1,
+            strokeColor: "#ffffff",
+            strokeWeight: 3
+        };
+
+        return this.iconoUsuarioCache;
     }
 };
