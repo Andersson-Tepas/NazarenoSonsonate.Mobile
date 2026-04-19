@@ -1,4 +1,5 @@
-﻿using NazarenoSonsonate.Shared.DTOs;
+﻿using Microsoft.Maui.Devices.Sensors;
+using NazarenoSonsonate.Shared.DTOs;
 using System.Net.Http.Json;
 
 namespace NazarenoSonsonate.Mobile.Services
@@ -12,26 +13,13 @@ namespace NazarenoSonsonate.Mobile.Services
             _httpClient = httpClient;
         }
 
-        public async Task<bool> EnviarUbicacionActualAsync(
+        public async Task<bool> EnviarUbicacionAsync(
             int recorridoId,
             string tipoUnidad,
+            Location location,
             string? grupoActual = null,
             string? mensaje = null)
         {
-            var permiso = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
-
-            if (permiso != PermissionStatus.Granted)
-                permiso = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
-
-            if (permiso != PermissionStatus.Granted)
-                return false;
-
-            var request = new GeolocationRequest(
-                GeolocationAccuracy.Best,
-                TimeSpan.FromSeconds(10));
-
-            var location = await Geolocation.Default.GetLocationAsync(request);
-
             if (location is null)
                 return false;
 

@@ -23,6 +23,7 @@
 
     andasVisibles: true,
     ubicacionesTiempoReal: {},
+    animacionesTiempoReal: {},
 
     esperarGoogleMaps: async function () {
         let intentos = 0;
@@ -76,6 +77,7 @@
 
         this.andasVisibles = true;
         this.ubicacionesTiempoReal = {};
+        this.animacionesTiempoReal = {};
     },
 
     dispose: function (limpiarElemento = true) {
@@ -110,6 +112,16 @@
             });
 
             this.marcadoresTiempoReal = {};
+        }
+
+        if (this.animacionesTiempoReal) {
+            Object.values(this.animacionesTiempoReal).forEach(animacion => {
+                if (animacion && animacion.frameId) {
+                    cancelAnimationFrame(animacion.frameId);
+                }
+            });
+
+            this.animacionesTiempoReal = {};
         }
 
         if (this.marcadorUsuario) {
@@ -175,8 +187,8 @@
 
             return {
                 strokeColor: esVirgen ? "#FFD600" : "#6A1B9A",
-                strokeWeight: esVirgen ? 5 : 5,
-                strokeOpacity: esVirgen ? 1 : 1,
+                strokeWeight: 5,
+                strokeOpacity: 1,
                 fillOpacity: 0
             };
         });
@@ -553,6 +565,8 @@
     registrarUbicacionTiempoReal: function (tipoUnidad, lat, lng, grupoActual, mensaje, fechaHora) {
         if (!tipoUnidad) return;
 
+        const ubicacionAnterior = this.ubicacionesTiempoReal[tipoUnidad];
+
         this.ubicacionesTiempoReal[tipoUnidad] = {
             tipoUnidad,
             lat,
@@ -562,9 +576,20 @@
             fechaHora
         };
 
-        if (this.andasVisibles) {
+        if (!this.andasVisibles) return;
+
+        if (!ubicacionAnterior) {
             this.renderizarAnda(tipoUnidad);
+            return;
         }
+
+        this.animarAnda(
+            tipoUnidad,
+            ubicacionAnterior.lat,
+            ubicacionAnterior.lng,
+            lat,
+            lng
+        );
     },
 
     renderizarAnda: function (tipoUnidad) {
@@ -608,6 +633,49 @@
             marker.setTitle(titulo);
             marker.setMap(this.map);
         }
+    },
+
+    animarAnda: function (tipoUnidad, fromLat, fromLng, toLat, toLng) {
+        if (!this.map) return;
+
+        const marker = this.marcadoresTiempoReal[tipoUnidad];
+        if (!marker) {
+            this.renderizarAnda(tipoUnidad);
+            return;
+        }
+
+        const animacionAnterior = this.animacionesTiempoReal[tipoUnidad];
+        if (animacionAnterior && animacionAnterior.frameId) {
+            cancelAnimationFrame(animacionAnterior.frameId);
+        }
+
+        const duracion = 4000;
+        const inicio = performance.now();
+
+        const step = (ahora) => {
+            const transcurrido = ahora - inicio;
+            const progreso = Math.min(transcurrido / duracion, 1);
+
+            const easing = 1 - Math.pow(1 - progreso, 3);
+
+            const latActual = fromLat + (toLat - fromLat) * easing;
+            const lngActual = fromLng + (toLng - fromLng) * easing;
+
+            marker.setPosition({ lat: latActual, lng: lngActual });
+
+            if (progreso < 1) {
+                this.animacionesTiempoReal[tipoUnidad] = {
+                    frameId: requestAnimationFrame(step)
+                };
+            } else {
+                marker.setPosition({ lat: toLat, lng: toLng });
+                delete this.animacionesTiempoReal[tipoUnidad];
+            }
+        };
+
+        this.animacionesTiempoReal[tipoUnidad] = {
+            frameId: requestAnimationFrame(step)
+        };
     },
 
     ocultarAndasTiempoReal: function () {

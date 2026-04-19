@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Maui.Devices.Sensors;
 
 namespace NazarenoSonsonate.Mobile.Services
 {
@@ -12,6 +13,7 @@ namespace NazarenoSonsonate.Mobile.Services
 
         private CancellationTokenSource? _cts;
         private Task? _trackingTask;
+        private Location? _ultimaUbicacionEnviada;
 
         public bool IsTracking { get; private set; }
         public int RecorridoId { get; private set; }
@@ -21,6 +23,9 @@ namespace NazarenoSonsonate.Mobile.Services
         public string? Error { get; private set; }
 
         public event Action? OnStateChanged;
+
+        private const double DistanciaMinimaMetros = 8.0;
+        private static readonly TimeSpan IntervaloLectura = TimeSpan.FromSeconds(5);
 
         public UbicacionTrackingService(UbicacionService ubicacionService)
         {
@@ -42,6 +47,8 @@ namespace NazarenoSonsonate.Mobile.Services
             Error = null;
             Estado = "INICIANDO...";
             IsTracking = true;
+            _ultimaUbicacionEnviada = null;
+
             NotifyStateChanged();
 
             _cts = new CancellationTokenSource();
@@ -77,6 +84,7 @@ namespace NazarenoSonsonate.Mobile.Services
             _cts?.Dispose();
             _cts = null;
             _trackingTask = null;
+            _ultimaUbicacionEnviada = null;
 
             IsTracking = false;
             Estado = "DETENIDO";
@@ -90,6 +98,58 @@ namespace NazarenoSonsonate.Mobile.Services
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
+                    Estado = "LEYENDO GPS...";
+                    NotifyStateChanged();
+
+                    var permiso = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+
+                    if (permiso != PermissionStatus.Granted)
+                        permiso = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+
+                    if (permiso != PermissionStatus.Granted)
+                    {
+                        Estado = "SIN PERMISO DE UBICACIÓN";
+                        Error = "No se concedió permiso de ubicación.";
+                        NotifyStateChanged();
+
+                        await Task.Delay(IntervaloLectura, cancellationToken);
+                        continue;
+                    }
+
+                    var request = new GeolocationRequest(
+                        GeolocationAccuracy.Best,
+                        TimeSpan.FromSeconds(10));
+
+                    var location = await Geolocation.Default.GetLocationAsync(request);
+
+                    if (location is null)
+                    {
+                        Estado = "SIN SEÑAL GPS";
+                        Error = "No se pudo obtener la ubicación actual.";
+                        NotifyStateChanged();
+
+                        await Task.Delay(IntervaloLectura, cancellationToken);
+                        continue;
+                    }
+
+                    if (_ultimaUbicacionEnviada is not null)
+                    {
+                        var distancia = Location.CalculateDistance(
+                            _ultimaUbicacionEnviada,
+                            location,
+                            DistanceUnits.Kilometers) * 1000.0;
+
+                        if (distancia < DistanciaMinimaMetros)
+                        {
+                            Estado = "ESPERANDO MOVIMIENTO...";
+                            Error = null;
+                            NotifyStateChanged();
+
+                            await Task.Delay(IntervaloLectura, cancellationToken);
+                            continue;
+                        }
+                    }
+
                     Estado = "ENVIANDO UBICACIÓN...";
                     NotifyStateChanged();
 
@@ -97,27 +157,29 @@ namespace NazarenoSonsonate.Mobile.Services
                         ? "Anda Virgen María"
                         : "Anda Jesús Nazareno";
 
-                    var enviado = await _ubicacionService.EnviarUbicacionActualAsync(
+                    var enviado = await _ubicacionService.EnviarUbicacionAsync(
                         RecorridoId,
                         TipoUnidad,
+                        location,
                         nombreUnidad,
                         $"Ubicación en vivo de {nombreUnidad}");
 
                     if (enviado)
                     {
+                        _ultimaUbicacionEnviada = location;
                         UltimaHoraEnvio = DateTime.Now;
                         Estado = "RASTREO ACTIVO";
                         Error = null;
                     }
                     else
                     {
-                        Estado = "SIN PERMISO O SIN GPS";
-                        Error = "No se pudo obtener o enviar la ubicación.";
+                        Estado = "ERROR DE ENVÍO";
+                        Error = "No se pudo enviar la ubicación al servidor.";
                     }
 
                     NotifyStateChanged();
 
-                    await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                    await Task.Delay(IntervaloLectura, cancellationToken);
                 }
             }
             catch (TaskCanceledException)
@@ -132,6 +194,7 @@ namespace NazarenoSonsonate.Mobile.Services
             finally
             {
                 IsTracking = false;
+                _ultimaUbicacionEnviada = null;
 
                 if (Estado != "ERROR")
                     Estado = "DETENIDO";

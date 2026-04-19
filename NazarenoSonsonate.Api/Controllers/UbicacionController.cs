@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using NazarenoSonsonate.Api.Data;
 using NazarenoSonsonate.Api.Hubs;
+using NazarenoSonsonate.Api.Models;
 using NazarenoSonsonate.Shared.DTOs;
-using System.Collections.Concurrent;
 
 namespace NazarenoSonsonate.Api.Controllers
 {
@@ -11,12 +13,14 @@ namespace NazarenoSonsonate.Api.Controllers
     public class UbicacionController : ControllerBase
     {
         private readonly IHubContext<ProcesionHub> _hubContext;
+        private readonly AppDbContext _dbContext;
 
-        private static readonly ConcurrentDictionary<string, UbicacionProcesionDto> _ultimasUbicaciones = new();
-
-        public UbicacionController(IHubContext<ProcesionHub> hubContext)
+        public UbicacionController(
+            IHubContext<ProcesionHub> hubContext,
+            AppDbContext dbContext)
         {
             _hubContext = hubContext;
+            _dbContext = dbContext;
         }
 
         [HttpGet("{recorridoId:int}")]
@@ -37,12 +41,22 @@ namespace NazarenoSonsonate.Api.Controllers
         }
 
         [HttpGet("ultimas/{recorridoId:int}")]
-        public ActionResult<List<UbicacionProcesionDto>> GetUltimas(int recorridoId)
+        public async Task<ActionResult<List<UbicacionProcesionDto>>> GetUltimas(int recorridoId)
         {
-            var resultado = _ultimasUbicaciones.Values
+            var resultado = await _dbContext.UltimasUbicacionesProcesion
                 .Where(x => x.RecorridoId == recorridoId)
                 .OrderBy(x => x.TipoUnidad)
-                .ToList();
+                .Select(x => new UbicacionProcesionDto
+                {
+                    RecorridoId = x.RecorridoId,
+                    Latitud = x.Latitud,
+                    Longitud = x.Longitud,
+                    FechaHora = x.FechaHora,
+                    GrupoActual = x.GrupoActual,
+                    Mensaje = x.Mensaje,
+                    TipoUnidad = x.TipoUnidad
+                })
+                .ToListAsync();
 
             return Ok(resultado);
         }
@@ -58,17 +72,36 @@ namespace NazarenoSonsonate.Api.Controllers
 
             ubicacion.FechaHora = DateTime.Now;
 
-            var key = $"{ubicacion.RecorridoId}:{ubicacion.TipoUnidad}";
-            _ultimasUbicaciones[key] = new UbicacionProcesionDto
+            var existente = await _dbContext.UltimasUbicacionesProcesion
+                .FirstOrDefaultAsync(x =>
+                    x.RecorridoId == ubicacion.RecorridoId &&
+                    x.TipoUnidad == ubicacion.TipoUnidad);
+
+            if (existente is null)
             {
-                RecorridoId = ubicacion.RecorridoId,
-                Latitud = ubicacion.Latitud,
-                Longitud = ubicacion.Longitud,
-                FechaHora = ubicacion.FechaHora,
-                GrupoActual = ubicacion.GrupoActual,
-                Mensaje = ubicacion.Mensaje,
-                TipoUnidad = ubicacion.TipoUnidad
-            };
+                existente = new UltimaUbicacionProcesion
+                {
+                    RecorridoId = ubicacion.RecorridoId,
+                    TipoUnidad = ubicacion.TipoUnidad,
+                    Latitud = ubicacion.Latitud,
+                    Longitud = ubicacion.Longitud,
+                    FechaHora = ubicacion.FechaHora,
+                    GrupoActual = ubicacion.GrupoActual,
+                    Mensaje = ubicacion.Mensaje
+                };
+
+                _dbContext.UltimasUbicacionesProcesion.Add(existente);
+            }
+            else
+            {
+                existente.Latitud = ubicacion.Latitud;
+                existente.Longitud = ubicacion.Longitud;
+                existente.FechaHora = ubicacion.FechaHora;
+                existente.GrupoActual = ubicacion.GrupoActual;
+                existente.Mensaje = ubicacion.Mensaje;
+            }
+
+            await _dbContext.SaveChangesAsync();
 
             await _hubContext.Clients
                 .Group($"recorrido-{ubicacion.RecorridoId}")
