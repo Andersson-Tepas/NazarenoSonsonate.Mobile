@@ -478,6 +478,12 @@
 
             foreach (var dto in ultimas)
             {
+                if (string.IsNullOrWhiteSpace(dto.TipoUnidad))
+                    continue;
+
+                if (dto.Latitud == 0 && dto.Longitud == 0)
+                    continue;
+
                 await JS.InvokeVoidAsync(
                     "mapaRecorrido.registrarUbicacionTiempoReal",
                     dto.TipoUnidad ?? "",
@@ -620,6 +626,18 @@
     private async Task MostrarProcesion()
     {
         mostrandoProcesion = true;
+
+        try
+        {
+            // Siempre recarga la última ubicación guardada,
+            // aunque no haya tiempo real activo en ese momento
+            await CargarUltimasUbicacionesAsync();
+        }
+        catch
+        {
+            // Si falla la consulta, igual se muestran las ubicaciones
+            // que ya hayan quedado cargadas en memoria JS
+        }
 
         await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
         await JS.InvokeVoidAsync("mapaRecorrido.ocultarTodosLosPuntos");

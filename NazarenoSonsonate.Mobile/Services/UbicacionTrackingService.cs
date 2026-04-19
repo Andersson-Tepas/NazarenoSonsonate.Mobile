@@ -5,6 +5,13 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Maui.Devices.Sensors;
 
+#if ANDROID
+using Android.Content;
+using Android.OS;
+using Microsoft.Maui.ApplicationModel;
+using NazarenoSonsonate.Mobile.Platforms.Android.Services;
+#endif
+
 namespace NazarenoSonsonate.Mobile.Services
 {
     public class UbicacionTrackingService
@@ -32,14 +39,32 @@ namespace NazarenoSonsonate.Mobile.Services
             _ubicacionService = ubicacionService;
         }
 
-        public Task StartAsync(int recorridoId, string tipoUnidad)
+        public async Task StartAsync(int recorridoId, string tipoUnidad)
         {
             if (IsTracking)
             {
                 if (RecorridoId == recorridoId && TipoUnidad == tipoUnidad)
-                    return Task.CompletedTask;
+                    return;
 
-                return Task.CompletedTask;
+                return;
+            }
+
+            Estado = "SOLICITANDO PERMISOS...";
+            Error = null;
+            NotifyStateChanged();
+
+            var permiso = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+
+            if (permiso != PermissionStatus.Granted)
+                permiso = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+
+            if (permiso != PermissionStatus.Granted)
+            {
+                Estado = "SIN PERMISO DE UBICACIÓN";
+                Error = "Debes conceder permiso de ubicación antes de iniciar el rastreo.";
+                IsTracking = false;
+                NotifyStateChanged();
+                return;
             }
 
             RecorridoId = recorridoId;
@@ -49,12 +74,13 @@ namespace NazarenoSonsonate.Mobile.Services
             IsTracking = true;
             _ultimaUbicacionEnviada = null;
 
+            StartForegroundService();
             NotifyStateChanged();
 
             _cts = new CancellationTokenSource();
             _trackingTask = RunTrackingAsync(_cts.Token);
 
-            return Task.CompletedTask;
+            await Task.CompletedTask;
         }
 
         public async Task StopAsync()
@@ -86,6 +112,8 @@ namespace NazarenoSonsonate.Mobile.Services
             _trackingTask = null;
             _ultimaUbicacionEnviada = null;
 
+            StopForegroundService();
+
             IsTracking = false;
             Estado = "DETENIDO";
             Error = null;
@@ -102,9 +130,6 @@ namespace NazarenoSonsonate.Mobile.Services
                     NotifyStateChanged();
 
                     var permiso = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
-
-                    if (permiso != PermissionStatus.Granted)
-                        permiso = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
 
                     if (permiso != PermissionStatus.Granted)
                     {
@@ -178,7 +203,6 @@ namespace NazarenoSonsonate.Mobile.Services
                     }
 
                     NotifyStateChanged();
-
                     await Task.Delay(IntervaloLectura, cancellationToken);
                 }
             }
@@ -196,12 +220,53 @@ namespace NazarenoSonsonate.Mobile.Services
                 IsTracking = false;
                 _ultimaUbicacionEnviada = null;
 
+                StopForegroundService();
+
                 if (Estado != "ERROR")
                     Estado = "DETENIDO";
 
                 NotifyStateChanged();
             }
         }
+
+#if ANDROID
+        private void StartForegroundService()
+        {
+            try
+            {
+                var context = Platform.AppContext;
+                var intent = new Intent(context, typeof(LocationForegroundService));
+                intent.PutExtra("tipoUnidad", TipoUnidad == "VirgenMaria" ? "Virgen María" : "Jesús Nazareno");
+
+                if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+                    context.StartForegroundService(intent);
+                else
+                    context.StartService(intent);
+            }
+            catch (Exception ex)
+            {
+                Error = $"No se pudo iniciar el servicio en segundo plano: {ex.Message}";
+                Estado = "ERROR";
+                NotifyStateChanged();
+            }
+        }
+
+        private void StopForegroundService()
+        {
+            try
+            {
+                var context = Platform.AppContext;
+                var intent = new Intent(context, typeof(LocationForegroundService));
+                context.StopService(intent);
+            }
+            catch
+            {
+            }
+        }
+#else
+        private void StartForegroundService() { }
+        private void StopForegroundService() { }
+#endif
 
         private void NotifyStateChanged()
         {

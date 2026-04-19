@@ -565,12 +565,18 @@
     registrarUbicacionTiempoReal: function (tipoUnidad, lat, lng, grupoActual, mensaje, fechaHora) {
         if (!tipoUnidad) return;
 
+        const latNum = Number(lat);
+        const lngNum = Number(lng);
+
+        if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return;
+        if (latNum === 0 && lngNum === 0) return;
+
         const ubicacionAnterior = this.ubicacionesTiempoReal[tipoUnidad];
 
         this.ubicacionesTiempoReal[tipoUnidad] = {
             tipoUnidad,
-            lat,
-            lng,
+            lat: latNum,
+            lng: lngNum,
             grupoActual,
             mensaje,
             fechaHora
@@ -587,8 +593,8 @@
             tipoUnidad,
             ubicacionAnterior.lat,
             ubicacionAnterior.lng,
-            lat,
-            lng
+            latNum,
+            lngNum
         );
     },
 
