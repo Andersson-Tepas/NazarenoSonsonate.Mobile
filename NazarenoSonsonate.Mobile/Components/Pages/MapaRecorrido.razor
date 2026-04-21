@@ -350,10 +350,12 @@
     private bool tiempoRealIniciado;
     private bool dependenciasMapaCargadas;
     private bool disposed;
-    private bool mostrandoProcesion = false;
+
+    // Ahora inicia mostrando siempre la última ubicación conocida
+    private bool mostrandoProcesion = true;
 
     private HubConnection? hubConnection;
-    private string estadoTiempoReal = "UBICACIÓN EN VIVO";
+    private string estadoTiempoReal = "ÚLTIMA UBICACIÓN VISIBLE";
     private string filtroActivo = "";
     private bool mostrarSelectorGrupo;
     private List<string> gruposDisponibles = new();
@@ -373,13 +375,13 @@
             mapaDibujado = false;
             inicializandoMapa = false;
             tiempoRealIniciado = false;
-            estadoTiempoReal = "UBICACIÓN EN VIVO";
+            estadoTiempoReal = "ÚLTIMA UBICACIÓN VISIBLE";
             filtroActivo = "";
             mostrarSelectorGrupo = false;
             gruposDisponibles = new();
             grupoSeleccionadoActual = null;
             tipoSelectorGrupo = "";
-            mostrandoProcesion = false;
+            mostrandoProcesion = true;
 
             puntosRutaCache = new();
             puntosPorTipoCache.Clear();
@@ -461,8 +463,12 @@
             await JS.InvokeVoidAsync("mapaRecorrido.init", "mapa-recorrido", 13.7189, -89.7242, 16);
             await JS.InvokeVoidAsync("mapaRecorrido.drawGeoJson", recorrido.RutaGeoJson);
             await JS.InvokeVoidAsync("mapaRecorrido.drawPuntosRuta", puntosRutaCache);
+
+            // Carga siempre las últimas ubicaciones conocidas
             await CargarUltimasUbicacionesAsync();
-            await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
+
+            // Y las deja visibles desde que entras
+            await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
 
             mapaDibujado = true;
 
@@ -646,6 +652,7 @@
     private async Task MostrarProcesion()
     {
         mostrandoProcesion = true;
+        estadoTiempoReal = "ÚLTIMA UBICACIÓN VISIBLE";
 
         try
         {
@@ -663,6 +670,8 @@
         grupoSeleccionadoActual = null;
         gruposDisponibles.Clear();
         mostrarSelectorGrupo = false;
+
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task FiltrarCargadores()
@@ -759,7 +768,10 @@
 
         hubConnection.Reconnected += _ =>
         {
-            estadoTiempoReal = "UBICACIÓN EN VIVO";
+            estadoTiempoReal = mostrandoProcesion
+                ? "UBICACIÓN EN VIVO"
+                : "ÚLTIMA UBICACIÓN VISIBLE";
+
             return InvokeAsync(StateHasChanged);
         };
 
@@ -767,7 +779,10 @@
         {
             if (!disposed)
             {
-                estadoTiempoReal = "CONEXIÓN PAUSADA";
+                estadoTiempoReal = mostrandoProcesion
+                    ? "MOSTRANDO ÚLTIMA UBICACIÓN"
+                    : "CONEXIÓN PAUSADA";
+
                 return InvokeAsync(StateHasChanged);
             }
 
@@ -790,14 +805,19 @@
 
             if (mostrandoProcesion)
             {
+                estadoTiempoReal = "UBICACIÓN EN VIVO";
                 await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
+                await InvokeAsync(StateHasChanged);
             }
         });
 
         await hubConnection.StartAsync();
         await hubConnection.InvokeAsync("UnirseRecorrido", Id);
 
-        estadoTiempoReal = "UBICACIÓN EN VIVO";
+        estadoTiempoReal = mostrandoProcesion
+            ? "UBICACIÓN EN VIVO"
+            : "ÚLTIMA UBICACIÓN VISIBLE";
+
         await InvokeAsync(StateHasChanged);
     }
 

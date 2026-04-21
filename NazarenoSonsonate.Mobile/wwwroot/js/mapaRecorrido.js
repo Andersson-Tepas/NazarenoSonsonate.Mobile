@@ -599,6 +599,7 @@
             fechaHora
         };
 
+        // Aunque no estén visibles ahorita, ya queda guardada la última ubicación en memoria JS
         if (!this.andasVisibles) return;
 
         if (!ubicacionAnterior) {
