@@ -24,6 +24,7 @@
     andasVisibles: true,
     ubicacionesTiempoReal: {},
     animacionesTiempoReal: {},
+    autoCentrarProcesion: true,
 
     esperarGoogleMaps: async function () {
         let intentos = 0;
@@ -78,6 +79,7 @@
         this.andasVisibles = true;
         this.ubicacionesTiempoReal = {};
         this.animacionesTiempoReal = {};
+        this.autoCentrarProcesion = true;
     },
 
     dispose: function (limpiarElemento = true) {
@@ -146,6 +148,7 @@
         this.grupoSeleccionado = null;
         this.tipoSeleccionado = null;
         this.andasVisibles = true;
+        this.autoCentrarProcesion = true;
 
         if (limpiarElemento && this.map && this.map.getDiv) {
             const div = this.map.getDiv();
@@ -573,6 +576,20 @@
 
         const ubicacionAnterior = this.ubicacionesTiempoReal[tipoUnidad];
 
+        if (ubicacionAnterior) {
+            const distancia = this.calcularDistanciaMetros(
+                ubicacionAnterior.lat,
+                ubicacionAnterior.lng,
+                latNum,
+                lngNum
+            );
+
+            // Ignorar saltos absurdos del GPS para no brincar a casas o puntos locos
+            if (distancia > 120) {
+                return;
+            }
+        }
+
         this.ubicacionesTiempoReal[tipoUnidad] = {
             tipoUnidad,
             lat: latNum,
@@ -585,7 +602,7 @@
         if (!this.andasVisibles) return;
 
         if (!ubicacionAnterior) {
-            this.renderizarAnda(tipoUnidad);
+            this.renderizarAnda(tipoUnidad, true);
             return;
         }
 
@@ -598,7 +615,7 @@
         );
     },
 
-    renderizarAnda: function (tipoUnidad) {
+    renderizarAnda: function (tipoUnidad, centrar = false) {
         if (!this.map || !tipoUnidad) return;
 
         const data = this.ubicacionesTiempoReal[tipoUnidad];
@@ -639,6 +656,10 @@
             marker.setTitle(titulo);
             marker.setMap(this.map);
         }
+
+        if (centrar && this.autoCentrarProcesion) {
+            this.map.panTo(position);
+        }
     },
 
     animarAnda: function (tipoUnidad, fromLat, fromLng, toLat, toLng) {
@@ -646,7 +667,7 @@
 
         const marker = this.marcadoresTiempoReal[tipoUnidad];
         if (!marker) {
-            this.renderizarAnda(tipoUnidad);
+            this.renderizarAnda(tipoUnidad, true);
             return;
         }
 
@@ -655,8 +676,9 @@
             cancelAnimationFrame(animacionAnterior.frameId);
         }
 
-        const duracion = 4000;
+        const duracion = 3000;
         const inicio = performance.now();
+        const centrarDuranteAnimacion = this.andasVisibles && this.autoCentrarProcesion;
 
         const step = (ahora) => {
             const transcurrido = ahora - inicio;
@@ -666,8 +688,13 @@
 
             const latActual = fromLat + (toLat - fromLat) * easing;
             const lngActual = fromLng + (toLng - fromLng) * easing;
+            const position = { lat: latActual, lng: lngActual };
 
-            marker.setPosition({ lat: latActual, lng: lngActual });
+            marker.setPosition(position);
+
+            if (centrarDuranteAnimacion) {
+                this.map.panTo(position);
+            }
 
             if (progreso < 1) {
                 this.animacionesTiempoReal[tipoUnidad] = {
@@ -675,6 +702,11 @@
                 };
             } else {
                 marker.setPosition({ lat: toLat, lng: toLng });
+
+                if (centrarDuranteAnimacion) {
+                    this.map.panTo({ lat: toLat, lng: toLng });
+                }
+
                 delete this.animacionesTiempoReal[tipoUnidad];
             }
         };
@@ -698,7 +730,7 @@
         this.andasVisibles = true;
 
         Object.keys(this.ubicacionesTiempoReal).forEach(tipoUnidad => {
-            this.renderizarAnda(tipoUnidad);
+            this.renderizarAnda(tipoUnidad, true);
         });
     },
 
@@ -738,5 +770,22 @@
         };
 
         return this.iconoUsuarioCache;
+    },
+
+    calcularDistanciaMetros: function (lat1, lng1, lat2, lng2) {
+        const toRad = (deg) => deg * Math.PI / 180;
+        const R = 6371000;
+
+        const dLat = toRad(lat2 - lat1);
+        const dLng = toRad(lng2 - lng1);
+
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return R * c;
     }
 };

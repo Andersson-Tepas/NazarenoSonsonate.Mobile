@@ -5,6 +5,8 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Maui.Devices.Sensors;
 
+using Microsoft.Maui.Devices.Sensors;
+
 #if ANDROID
 using Android.Content;
 using Android.OS;
@@ -32,7 +34,9 @@ namespace NazarenoSonsonate.Mobile.Services
         public event Action? OnStateChanged;
 
         private const double DistanciaMinimaMetros = 8.0;
+        private const double PrecisionMaximaAceptableMetros = 25.0;
         private static readonly TimeSpan IntervaloLectura = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan TiempoMaximoSinEnviar = TimeSpan.FromSeconds(20);
 
         public UbicacionTrackingService(UbicacionService ubicacionService)
         {
@@ -73,6 +77,7 @@ namespace NazarenoSonsonate.Mobile.Services
             Estado = "INICIANDO...";
             IsTracking = true;
             _ultimaUbicacionEnviada = null;
+            UltimaHoraEnvio = null;
 
             StartForegroundService();
             NotifyStateChanged();
@@ -127,6 +132,7 @@ namespace NazarenoSonsonate.Mobile.Services
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     Estado = "LEYENDO GPS...";
+                    Error = null;
                     NotifyStateChanged();
 
                     var permiso = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
@@ -157,25 +163,48 @@ namespace NazarenoSonsonate.Mobile.Services
                         continue;
                     }
 
-                    if (_ultimaUbicacionEnviada is not null)
+                    if (!EsUbicacionConfiable(location))
+                    {
+                        Estado = "GPS IMPRECISO";
+                        Error = "La ubicación actual no tiene precisión suficiente.";
+                        NotifyStateChanged();
+
+                        await Task.Delay(IntervaloLectura, cancellationToken);
+                        continue;
+                    }
+
+                    var debeEnviarPorTiempo =
+                        !UltimaHoraEnvio.HasValue ||
+                        DateTime.Now - UltimaHoraEnvio.Value >= TiempoMaximoSinEnviar;
+
+                    var debeEnviarPorDistancia = false;
+
+                    if (_ultimaUbicacionEnviada is null)
+                    {
+                        debeEnviarPorDistancia = true;
+                    }
+                    else
                     {
                         var distancia = Location.CalculateDistance(
                             _ultimaUbicacionEnviada,
                             location,
                             DistanceUnits.Kilometers) * 1000.0;
 
-                        if (distancia < DistanciaMinimaMetros)
-                        {
-                            Estado = "ESPERANDO MOVIMIENTO...";
-                            Error = null;
-                            NotifyStateChanged();
+                        debeEnviarPorDistancia = distancia >= DistanciaMinimaMetros;
+                    }
 
-                            await Task.Delay(IntervaloLectura, cancellationToken);
-                            continue;
-                        }
+                    if (!debeEnviarPorDistancia && !debeEnviarPorTiempo)
+                    {
+                        Estado = "ESPERANDO MOVIMIENTO...";
+                        Error = null;
+                        NotifyStateChanged();
+
+                        await Task.Delay(IntervaloLectura, cancellationToken);
+                        continue;
                     }
 
                     Estado = "ENVIANDO UBICACIÓN...";
+                    Error = null;
                     NotifyStateChanged();
 
                     var nombreUnidad = TipoUnidad == "VirgenMaria"
@@ -227,6 +256,29 @@ namespace NazarenoSonsonate.Mobile.Services
 
                 NotifyStateChanged();
             }
+        }
+
+        private static bool EsUbicacionConfiable(Location location)
+        {
+            if (double.IsNaN(location.Latitude) || double.IsNaN(location.Longitude))
+                return false;
+
+            if (double.IsInfinity(location.Latitude) || double.IsInfinity(location.Longitude))
+                return false;
+
+            if (location.Latitude == 0 && location.Longitude == 0)
+                return false;
+
+            if (location.Latitude < -90 || location.Latitude > 90)
+                return false;
+
+            if (location.Longitude < -180 || location.Longitude > 180)
+                return false;
+
+            if (location.Accuracy.HasValue && location.Accuracy.Value > PrecisionMaximaAceptableMetros)
+                return false;
+
+            return true;
         }
 
 #if ANDROID

@@ -23,19 +23,49 @@ namespace NazarenoSonsonate.Mobile.Services
             if (location is null)
                 return false;
 
+            if (!EsUbicacionValida(location))
+                return false;
+
             var dto = new UbicacionProcesionDto
             {
                 RecorridoId = recorridoId,
                 Latitud = location.Latitude,
                 Longitud = location.Longitude,
-                FechaHora = DateTime.Now,
+                FechaHora = DateTime.UtcNow,
                 GrupoActual = grupoActual ?? "",
                 Mensaje = mensaje ?? "Ubicación enviada desde dispositivo autorizado",
                 TipoUnidad = tipoUnidad
             };
 
-            var response = await _httpClient.PostAsJsonAsync("api/ubicacion", dto);
-            return response.IsSuccessStatusCode;
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync("api/ubicacion", dto);
+                return response.IsSuccessStatusCode;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool EsUbicacionValida(Location location)
+        {
+            if (double.IsNaN(location.Latitude) || double.IsNaN(location.Longitude))
+                return false;
+
+            if (double.IsInfinity(location.Latitude) || double.IsInfinity(location.Longitude))
+                return false;
+
+            if (location.Latitude == 0 && location.Longitude == 0)
+                return false;
+
+            if (location.Latitude < -90 || location.Latitude > 90)
+                return false;
+
+            if (location.Longitude < -180 || location.Longitude > 180)
+                return false;
+
+            return true;
         }
     }
 }
