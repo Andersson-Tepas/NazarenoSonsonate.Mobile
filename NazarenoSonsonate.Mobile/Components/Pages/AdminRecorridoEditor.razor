@@ -4,6 +4,7 @@
 @using NazarenoSonsonate.Shared.DTOs
 @inject IJSRuntime JS
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
+@inject NazarenoSonsonate.Mobile.Services.PuntoRutaCacheService PuntoRutaCacheService
 @inject NazarenoSonsonate.Mobile.Services.UbicacionTrackingService TrackingService
 @inject NavigationManager Navigation
 @implements IAsyncDisposable
@@ -495,6 +496,7 @@
     private string? mensaje;
     private bool mapaInicializado;
     private bool dependenciasMapaCargadas;
+    private List<PuntoRutaDto> puntosRutaCache = new();
 
     private string tipoUnidadSeleccionada = "JesusNazareno";
 
@@ -525,6 +527,26 @@
 
             recorrido = await RecorridoService.ObtenerRecorridoPorIdAsync(Id);
 
+            var puntosDetalle = recorrido?.PuntosRuta?.ToList() ?? new List<PuntoRutaDto>();
+
+            if (puntosDetalle.Count > 0)
+            {
+                puntosRutaCache = puntosDetalle;
+                await PuntoRutaCacheService.GuardarPuntosPorRecorridoAsync(Id, puntosRutaCache);
+            }
+            else
+            {
+                puntosRutaCache = await PuntoRutaCacheService.ObtenerPuntosPorRecorridoAsync(
+                    Id,
+                    forzarRecarga: false,
+                    permitirApi: true);
+            }
+
+            if (recorrido is not null)
+            {
+                recorrido.PuntosRuta = puntosRutaCache;
+            }
+
             if (TrackingService.IsTracking && TrackingService.RecorridoId == Id)
             {
                 tipoUnidadSeleccionada = TrackingService.TipoUnidad;
@@ -548,7 +570,7 @@
             {
                 await CargarDependenciasMapaAdminAsync();
 
-                var checkpointsJson = JsonSerializer.Serialize(recorrido.PuntosRuta);
+                var checkpointsJson = JsonSerializer.Serialize(puntosRutaCache);
 
                 await JS.InvokeVoidAsync("mapaRecorridoAdmin.esperarGoogleMaps");
                 await JS.InvokeVoidAsync(
@@ -674,6 +696,16 @@
             }
 
             await RecorridoService.GuardarMapaAsync(Id, dto);
+
+            puntosRutaCache = dto.PuntosRuta ?? new List<PuntoRutaDto>();
+            await PuntoRutaCacheService.GuardarPuntosPorRecorridoAsync(Id, puntosRutaCache);
+
+            if (recorrido is not null)
+            {
+                recorrido.PuntosRuta = puntosRutaCache;
+                recorrido.RutaGeoJson = dto.RutaGeoJson;
+            }
+
             mensaje = "Ruta y puntos guardados correctamente.";
         }
         catch (Exception ex)

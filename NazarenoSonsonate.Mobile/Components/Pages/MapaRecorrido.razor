@@ -6,6 +6,7 @@
 @using Microsoft.Maui.Devices.Sensors
 @using NazarenoSonsonate.Shared.DTOs
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
+@inject NazarenoSonsonate.Mobile.Services.PuntoRutaCacheService PuntoRutaCacheService
 @inject IJSRuntime JS
 @inject HttpClient Http
 @implements IAsyncDisposable
@@ -407,7 +408,26 @@
 
             recorrido = await RecorridoService.ObtenerRecorridoPorIdAsync(Id);
 
-            puntosRutaCache = recorrido?.PuntosRuta?.ToList() ?? new List<PuntoRutaDto>();
+            var puntosDetalle = recorrido?.PuntosRuta?.ToList() ?? new List<PuntoRutaDto>();
+
+            if (puntosDetalle.Count > 0)
+            {
+                puntosRutaCache = puntosDetalle;
+                await PuntoRutaCacheService.GuardarPuntosPorRecorridoAsync(Id, puntosRutaCache);
+            }
+            else
+            {
+                puntosRutaCache = await PuntoRutaCacheService.ObtenerPuntosPorRecorridoAsync(
+                    Id,
+                    forzarRecarga: false,
+                    permitirApi: true);
+            }
+
+            if (recorrido is not null)
+            {
+                recorrido.PuntosRuta = puntosRutaCache;
+            }
+
             ConstruirCacheLocal();
         }
         catch (Exception ex)
@@ -629,14 +649,10 @@
 
         try
         {
-            // Siempre recarga la última ubicación guardada,
-            // aunque no haya tiempo real activo en ese momento
             await CargarUltimasUbicacionesAsync();
         }
         catch
         {
-            // Si falla la consulta, igual se muestran las ubicaciones
-            // que ya hayan quedado cargadas en memoria JS
         }
 
         await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");

@@ -9,6 +9,9 @@
     modoCheckpoint: false,
     infoWindowCheckpoint: null,
     mapClickListener: null,
+    redrawToken: 0,
+    redrawCheckpointToken: 0,
+    suppressRouteMarkerRedraw: false,
 
     esperarGoogleMaps: async function () {
         let intentos = 0;
@@ -36,6 +39,12 @@
         return this.rutaActiva === "virgen"
             ? this.polylineVirgen
             : this.polylineJesus;
+    },
+
+    obtenerColorRutaActiva: function () {
+        return this.rutaActiva === "virgen"
+            ? "http://maps.google.com/mapfiles/ms/icons/orange-dot.png"
+            : "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png";
     },
 
     actualizarEdicionRutas: function () {
@@ -107,6 +116,9 @@
         this.checkpointMarkers = [];
         this.checkpoints = [];
         this.modoCheckpoint = false;
+        this.redrawToken = 0;
+        this.redrawCheckpointToken = 0;
+        this.suppressRouteMarkerRedraw = false;
         this.infoWindowCheckpoint = new google.maps.InfoWindow();
 
         if (geoJsonText) {
@@ -118,6 +130,8 @@
         }
 
         this.actualizarEdicionRutas();
+        this.registrarEventosPolyline();
+        this.redibujarMarcadoresRuta();
 
         this.mapClickListener = this.map.addListener("click", (event) => {
             if (!event.latLng) return;
@@ -161,8 +175,36 @@
             if (!polylineActiva) return;
 
             polylineActiva.getPath().push(event.latLng);
-            this.redibujarMarcadoresRuta();
         });
+    },
+
+    registrarEventosPolyline: function () {
+        const registrar = (polyline) => {
+            if (!polyline) return;
+
+            const path = polyline.getPath();
+
+            path.addListener("insert_at", () => {
+                if (!this.suppressRouteMarkerRedraw) {
+                    this.redibujarMarcadoresRuta();
+                }
+            });
+
+            path.addListener("remove_at", () => {
+                if (!this.suppressRouteMarkerRedraw) {
+                    this.redibujarMarcadoresRuta();
+                }
+            });
+
+            path.addListener("set_at", () => {
+                if (!this.suppressRouteMarkerRedraw) {
+                    this.redibujarMarcadoresRuta();
+                }
+            });
+        };
+
+        registrar(this.polylineJesus);
+        registrar(this.polylineVirgen);
     },
 
     activarModoCheckpoint: function () {
@@ -192,6 +234,8 @@
                     bounds.extend(latLng);
                 });
             };
+
+            this.suppressRouteMarkerRedraw = true;
 
             if (data.type === "FeatureCollection" && Array.isArray(data.features)) {
                 const lineFeatures = data.features.filter(f =>
@@ -233,12 +277,14 @@
                 agregarCoordenadas(pathJesus, data.coordinates || []);
             }
 
+            this.suppressRouteMarkerRedraw = false;
             this.redibujarMarcadoresRuta();
 
             if (!bounds.isEmpty()) {
                 this.map.fitBounds(bounds);
             }
         } catch (e) {
+            this.suppressRouteMarkerRedraw = false;
             console.error("Error cargando GeoJSON:", e);
         }
     },
@@ -268,29 +314,39 @@
         }
     },
 
-    redibujarMarcadoresRuta: function () {
+    limpiarMarcadoresRuta: function () {
         this.markers.forEach(m => {
             google.maps.event.clearInstanceListeners(m);
             m.setMap(null);
         });
         this.markers = [];
+    },
+
+    redibujarMarcadoresRuta: async function () {
+        const token = ++this.redrawToken;
+
+        this.limpiarMarcadoresRuta();
 
         const polylineActiva = this.obtenerPolylineActiva();
-        if (!polylineActiva) return;
+        if (!polylineActiva || !this.map) return;
 
         const path = polylineActiva.getPath();
+        const iconUrl = this.obtenerColorRutaActiva();
+
+        const lote = 30;
 
         for (let i = 0; i < path.getLength(); i++) {
+            if (token !== this.redrawToken) return;
+
             const point = path.getAt(i);
 
             const marker = new google.maps.Marker({
                 position: point,
                 map: this.map,
                 label: `${i + 1}`,
+                optimized: true,
                 icon: {
-                    url: this.rutaActiva === "virgen"
-                        ? "http://maps.google.com/mapfiles/ms/icons/orange-dot.png"
-                        : "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png"
+                    url: iconUrl
                 }
             });
 
@@ -298,11 +354,14 @@
                 const pathActual = this.obtenerPolylineActiva().getPath();
                 if (i < pathActual.getLength()) {
                     pathActual.removeAt(i);
-                    this.redibujarMarcadoresRuta();
                 }
             });
 
             this.markers.push(marker);
+
+            if ((i + 1) % lote === 0) {
+                await this.cederUI();
+            }
         }
     },
 
@@ -322,16 +381,26 @@
         };
     },
 
-    redibujarCheckpoints: function () {
+    limpiarCheckpointMarkers: function () {
         this.checkpointMarkers.forEach(m => {
             google.maps.event.clearInstanceListeners(m);
             m.setMap(null);
         });
         this.checkpointMarkers = [];
+    },
+
+    redibujarCheckpoints: async function () {
+        const token = ++this.redrawCheckpointToken;
+
+        this.limpiarCheckpointMarkers();
 
         const iconoGrupo = this.crearIconoGrupo();
+        const lote = 40;
 
-        this.checkpoints.forEach((punto, index) => {
+        for (let index = 0; index < this.checkpoints.length; index++) {
+            if (token !== this.redrawCheckpointToken) return;
+
+            const punto = this.checkpoints[index];
             punto.Orden = index + 1;
             punto.Tipo = this.normalizarTipo(punto.Tipo);
 
@@ -341,6 +410,7 @@
                 position: { lat: punto.Latitud, lng: punto.Longitud },
                 map: this.map,
                 draggable: true,
+                optimized: true,
                 title: `${punto.Tipo} ${punto.Grupo || punto.Referencia || `Punto ${index + 1}`}`,
                 icon: iconoGrupo,
                 label: {
@@ -399,7 +469,11 @@
             });
 
             this.checkpointMarkers.push(marker);
-        });
+
+            if ((index + 1) % lote === 0) {
+                await this.cederUI();
+            }
+        }
     },
 
     deshacerUltimoPunto: function () {
@@ -411,7 +485,6 @@
 
         if (length > 0) {
             path.removeAt(length - 1);
-            this.redibujarMarcadoresRuta();
         }
     },
 
@@ -501,6 +574,10 @@
         }));
     },
 
+    cederUI: function () {
+        return new Promise(resolve => setTimeout(resolve, 0));
+    },
+
     dispose: function (limpiarElemento = true) {
         if (this.infoWindowCheckpoint) {
             this.infoWindowCheckpoint.close();
@@ -512,26 +589,19 @@
             this.mapClickListener = null;
         }
 
-        this.markers.forEach(m => {
-            google.maps.event.clearInstanceListeners(m);
-            m.setMap(null);
-        });
-        this.markers = [];
-
-        this.checkpointMarkers.forEach(m => {
-            google.maps.event.clearInstanceListeners(m);
-            m.setMap(null);
-        });
-        this.checkpointMarkers = [];
+        this.limpiarMarcadoresRuta();
+        this.limpiarCheckpointMarkers();
 
         if (this.polylineJesus) {
             google.maps.event.clearInstanceListeners(this.polylineJesus);
+            google.maps.event.clearInstanceListeners(this.polylineJesus.getPath());
             this.polylineJesus.setMap(null);
             this.polylineJesus = null;
         }
 
         if (this.polylineVirgen) {
             google.maps.event.clearInstanceListeners(this.polylineVirgen);
+            google.maps.event.clearInstanceListeners(this.polylineVirgen.getPath());
             this.polylineVirgen.setMap(null);
             this.polylineVirgen = null;
         }
@@ -539,6 +609,9 @@
         this.checkpoints = [];
         this.modoCheckpoint = false;
         this.rutaActiva = "jesus";
+        this.redrawToken++;
+        this.redrawCheckpointToken++;
+        this.suppressRouteMarkerRedraw = false;
 
         if (limpiarElemento && this.map && this.map.getDiv) {
             const div = this.map.getDiv();
