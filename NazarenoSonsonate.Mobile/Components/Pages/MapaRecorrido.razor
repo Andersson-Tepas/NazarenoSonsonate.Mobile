@@ -4,6 +4,7 @@
 @using Microsoft.JSInterop
 @using Microsoft.Maui.ApplicationModel
 @using Microsoft.Maui.Devices.Sensors
+@using Microsoft.Maui.Storage
 @using NazarenoSonsonate.Shared.DTOs
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
 @inject NazarenoSonsonate.Mobile.Services.PuntoRutaCacheService PuntoRutaCacheService
@@ -342,6 +343,9 @@
     [Parameter]
     public int Id { get; set; }
 
+    private const string UltimasUbicacionesCachePrefix = "ultimas_ubicaciones_recorrido_";
+    private static readonly TimeSpan UltimasUbicacionesCacheDuracion = TimeSpan.FromMinutes(10);
+
     private RecorridoDto? recorrido;
     private bool cargando = true;
     private string? error;
@@ -350,8 +354,6 @@
     private bool tiempoRealIniciado;
     private bool dependenciasMapaCargadas;
     private bool disposed;
-
-    // Ahora inicia mostrando siempre la última ubicación conocida
     private bool mostrandoProcesion = true;
 
     private HubConnection? hubConnection;
@@ -464,10 +466,12 @@
             await JS.InvokeVoidAsync("mapaRecorrido.drawGeoJson", recorrido.RutaGeoJson);
             await JS.InvokeVoidAsync("mapaRecorrido.drawPuntosRuta", puntosRutaCache);
 
-            // Carga siempre las últimas ubicaciones conocidas
-            await CargarUltimasUbicacionesAsync();
+            // Primero muestra cache instantáneo
+            await MostrarUltimasUbicacionesDesdeCacheAsync();
 
-            // Y las deja visibles desde que entras
+            // Luego refresca desde API en segundo plano
+            _ = ActualizarUltimasUbicacionesDesdeApiEnSegundoPlanoAsync();
+
             await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
 
             mapaDibujado = true;
@@ -493,12 +497,38 @@
         }
     }
 
-    private async Task CargarUltimasUbicacionesAsync()
+    private string ObtenerUltimasUbicacionesCacheKey()
+        => $"{UltimasUbicacionesCachePrefix}{Id}";
+
+    private string ObtenerUltimasUbicacionesCacheTimeKey()
+        => $"{UltimasUbicacionesCachePrefix}{Id}_time";
+
+    private async Task MostrarUltimasUbicacionesDesdeCacheAsync()
     {
         try
         {
-            var ultimas = await Http.GetFromJsonAsync<List<UbicacionProcesionDto>>($"api/ubicacion/ultimas/{Id}");
+            var cacheKey = ObtenerUltimasUbicacionesCacheKey();
+            var cacheTimeKey = ObtenerUltimasUbicacionesCacheTimeKey();
 
+            var json = Preferences.Default.Get(cacheKey, string.Empty);
+            var timeRaw = Preferences.Default.Get(cacheTimeKey, string.Empty);
+
+            if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(timeRaw))
+                return;
+
+            if (!DateTime.TryParse(
+                    timeRaw,
+                    null,
+                    System.Globalization.DateTimeStyles.RoundtripKind,
+                    out var cacheTime))
+            {
+                return;
+            }
+
+            if (DateTime.UtcNow - cacheTime > UltimasUbicacionesCacheDuracion)
+                return;
+
+            var ultimas = JsonSerializer.Deserialize<List<UbicacionProcesionDto>>(json);
             if (ultimas is null || ultimas.Count == 0)
                 return;
 
@@ -518,6 +548,62 @@
                     dto.GrupoActual ?? "",
                     dto.Mensaje ?? "",
                     dto.FechaHora.ToString("g"));
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task GuardarUltimasUbicacionesEnCacheAsync(List<UbicacionProcesionDto> ubicaciones)
+    {
+        try
+        {
+            var cacheKey = ObtenerUltimasUbicacionesCacheKey();
+            var cacheTimeKey = ObtenerUltimasUbicacionesCacheTimeKey();
+
+            Preferences.Default.Set(cacheKey, JsonSerializer.Serialize(ubicaciones));
+            Preferences.Default.Set(cacheTimeKey, DateTime.UtcNow.ToString("O"));
+        }
+        catch
+        {
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private async Task ActualizarUltimasUbicacionesDesdeApiEnSegundoPlanoAsync()
+    {
+        try
+        {
+            var ultimas = await Http.GetFromJsonAsync<List<UbicacionProcesionDto>>($"api/ubicacion/ultimas/{Id}");
+
+            if (ultimas is null || ultimas.Count == 0)
+                return;
+
+            await GuardarUltimasUbicacionesEnCacheAsync(ultimas);
+
+            foreach (var dto in ultimas)
+            {
+                if (string.IsNullOrWhiteSpace(dto.TipoUnidad))
+                    continue;
+
+                if (dto.Latitud == 0 && dto.Longitud == 0)
+                    continue;
+
+                await JS.InvokeVoidAsync(
+                    "mapaRecorrido.registrarUbicacionTiempoReal",
+                    dto.TipoUnidad ?? "",
+                    dto.Latitud,
+                    dto.Longitud,
+                    dto.GrupoActual ?? "",
+                    dto.Mensaje ?? "",
+                    dto.FechaHora.ToString("g"));
+            }
+
+            if (mostrandoProcesion)
+            {
+                await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
             }
         }
         catch
@@ -654,13 +740,11 @@
         mostrandoProcesion = true;
         estadoTiempoReal = "ÚLTIMA UBICACIÓN VISIBLE";
 
-        try
-        {
-            await CargarUltimasUbicacionesAsync();
-        }
-        catch
-        {
-        }
+        // Primero cache instantáneo
+        await MostrarUltimasUbicacionesDesdeCacheAsync();
+
+        // Luego refresco desde API
+        _ = ActualizarUltimasUbicacionesDesdeApiEnSegundoPlanoAsync();
 
         await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
         await JS.InvokeVoidAsync("mapaRecorrido.ocultarTodosLosPuntos");
@@ -802,6 +886,9 @@
                 dto.GrupoActual ?? "",
                 dto.Mensaje ?? "",
                 dto.FechaHora.ToString("g"));
+
+            // refresca cache con las nuevas últimas ubicaciones
+            _ = ActualizarUltimasUbicacionesDesdeApiEnSegundoPlanoAsync();
 
             if (mostrandoProcesion)
             {
