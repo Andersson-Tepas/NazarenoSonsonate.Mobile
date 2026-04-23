@@ -8,6 +8,10 @@ namespace NazarenoSonsonate.Mobile.Services
         private HubConnection? _hubConnection;
 
         public event Action<UbicacionProcesionDto>? UbicacionRecibida;
+        public event Action<string>? EstadoConexionCambiado;
+
+        public bool EstaConectado =>
+            _hubConnection?.State == HubConnectionState.Connected;
 
         public async Task IniciarAsync(string baseUrl)
         {
@@ -31,15 +35,35 @@ namespace NazarenoSonsonate.Mobile.Services
                     .WithAutomaticReconnect()
                     .Build();
 
+                _hubConnection.Reconnecting += _ =>
+                {
+                    EstadoConexionCambiado?.Invoke("RECONECTANDO");
+                    return Task.CompletedTask;
+                };
+
+                _hubConnection.Reconnected += _ =>
+                {
+                    EstadoConexionCambiado?.Invoke("CONECTADO");
+                    return Task.CompletedTask;
+                };
+
+                _hubConnection.Closed += _ =>
+                {
+                    EstadoConexionCambiado?.Invoke("DESCONECTADO");
+                    return Task.CompletedTask;
+                };
+
                 _hubConnection.On<UbicacionProcesionDto>("RecibirUbicacion", ubicacion =>
                 {
                     UbicacionRecibida?.Invoke(ubicacion);
                 });
 
                 await _hubConnection.StartAsync();
+                EstadoConexionCambiado?.Invoke("CONECTADO");
             }
             catch (Exception ex)
             {
+                EstadoConexionCambiado?.Invoke("ERROR");
                 Console.WriteLine($"Error SignalR: {ex.Message}");
             }
         }
@@ -56,6 +80,7 @@ namespace NazarenoSonsonate.Mobile.Services
             finally
             {
                 _hubConnection = null;
+                EstadoConexionCambiado?.Invoke("DESCONECTADO");
             }
         }
     }

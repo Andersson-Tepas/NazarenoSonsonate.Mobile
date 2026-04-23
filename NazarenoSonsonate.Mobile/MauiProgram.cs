@@ -23,7 +23,7 @@ public static class MauiProgram
         builder.Logging.AddDebug();
 #endif
 
-        const string baseUrl = "https://nazarenosonsonate-api.somee.com/";
+        const string baseUrl = "https://www.nazarenosonsonate-api-v2.somee.com/";
 
         builder.Services.AddSingleton(new HttpClient
         {

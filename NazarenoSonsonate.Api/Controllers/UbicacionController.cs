@@ -44,7 +44,10 @@ namespace NazarenoSonsonate.Api.Controllers
         public async Task<ActionResult<List<UbicacionProcesionDto>>> GetUltimas(int recorridoId)
         {
             var resultado = await _dbContext.UltimasUbicacionesProcesion
+                .AsNoTracking()
                 .Where(x => x.RecorridoId == recorridoId)
+                .Where(x => !string.IsNullOrWhiteSpace(x.TipoUnidad))
+                .Where(x => x.Latitud != 0 || x.Longitud != 0)
                 .OrderBy(x => x.TipoUnidad)
                 .Select(x => new UbicacionProcesionDto
                 {
