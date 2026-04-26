@@ -9,8 +9,7 @@ namespace NazarenoSonsonate.Mobile.Services
     {
         private readonly HttpClient _httpClient;
 
-        private const string CacheVersion = "v2";
-        private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(12);
+        private const string CacheVersion = "v3";
 
         private readonly Dictionary<string, List<PuntoRutaDto>> _memoryCache = new();
         private readonly Dictionary<string, DateTime> _memoryCacheTime = new();
@@ -36,43 +35,55 @@ namespace NazarenoSonsonate.Mobile.Services
 
             if (!forzarRecarga &&
                 _memoryCache.TryGetValue(cacheKey, out var cacheado) &&
-                _memoryCacheTime.TryGetValue(cacheKey, out var fechaMemoria) &&
-                !CacheExpirado(fechaMemoria))
+                cacheado.Count > 0)
             {
                 return cacheado;
             }
 
             await _lock.WaitAsync();
+
             try
             {
                 if (!forzarRecarga &&
                     _memoryCache.TryGetValue(cacheKey, out cacheado) &&
-                    _memoryCacheTime.TryGetValue(cacheKey, out fechaMemoria) &&
-                    !CacheExpirado(fechaMemoria))
+                    cacheado.Count > 0)
                 {
                     return cacheado;
                 }
 
-                if (!forzarRecarga)
+                var local = !forzarRecarga
+                    ? LeerDesdePreferences(recorridoId, permitirExpirado: true)
+                    : null;
+
+                if (local is not null && local.Value.Data.Count > 0)
                 {
-                    var local = LeerDesdePreferences(recorridoId);
-                    if (local is not null)
-                    {
-                        _memoryCache[cacheKey] = local.Value.Data;
-                        _memoryCacheTime[cacheKey] = local.Value.Timestamp;
+                    _memoryCache[cacheKey] = local.Value.Data;
+                    _memoryCacheTime[cacheKey] = local.Value.Timestamp;
+
+                    if (!permitirApi)
                         return local.Value.Data;
-                    }
                 }
 
                 if (!permitirApi)
-                    return new List<PuntoRutaDto>();
+                    return local?.Data ?? new List<PuntoRutaDto>();
 
-                // Mantengo tu endpoint actual
-                var result = await _httpClient.GetFromJsonAsync<List<PuntoRutaDto>>($"api/ubicacion/{recorridoId}")
-                             ?? new List<PuntoRutaDto>();
+                try
+                {
+                    var result = await _httpClient.GetFromJsonAsync<List<PuntoRutaDto>>($"api/ubicacion/{recorridoId}")
+                                 ?? new List<PuntoRutaDto>();
 
-                await GuardarPuntosPorRecorridoAsync(recorridoId, result);
-                return result;
+                    if (result.Count > 0)
+                    {
+                        await GuardarPuntosPorRecorridoAsync(recorridoId, result);
+                        return result;
+                    }
+                }
+                catch
+                {
+                    // Sin internet o API caída: devolvemos cache local si existe.
+                }
+
+                return local?.Data ?? new List<PuntoRutaDto>();
             }
             finally
             {
@@ -88,8 +99,14 @@ namespace NazarenoSonsonate.Mobile.Services
             _memoryCache[cacheKey] = puntos;
             _memoryCacheTime[cacheKey] = now;
 
-            Preferences.Default.Set(cacheKey, JsonSerializer.Serialize(puntos));
-            Preferences.Default.Set(GetCacheTimeKey(recorridoId), now.ToString("O"));
+            try
+            {
+                Preferences.Default.Set(cacheKey, JsonSerializer.Serialize(puntos));
+                Preferences.Default.Set(GetCacheTimeKey(recorridoId), now.ToString("O"));
+            }
+            catch
+            {
+            }
 
             await Task.CompletedTask;
         }
@@ -138,6 +155,7 @@ namespace NazarenoSonsonate.Mobile.Services
                 {
                     if (int.TryParse(x, out var n))
                         return n;
+
                     return int.MaxValue;
                 })
                 .ThenBy(x => x)
@@ -166,39 +184,44 @@ namespace NazarenoSonsonate.Mobile.Services
             _memoryCacheTime.Clear();
         }
 
-        private static bool CacheExpirado(DateTime fechaUtc)
+        private (List<PuntoRutaDto> Data, DateTime Timestamp)? LeerDesdePreferences(
+            int recorridoId,
+            bool permitirExpirado)
         {
-            return DateTime.UtcNow - fechaUtc > CacheDuration;
-        }
+            try
+            {
+                var cacheKey = GetCacheKey(recorridoId);
+                var timeKey = GetCacheTimeKey(recorridoId);
 
-        private (List<PuntoRutaDto> Data, DateTime Timestamp)? LeerDesdePreferences(int recorridoId)
-        {
-            var cacheKey = GetCacheKey(recorridoId);
-            var timeKey = GetCacheTimeKey(recorridoId);
+                var json = Preferences.Default.Get(cacheKey, string.Empty);
+                var timestampRaw = Preferences.Default.Get(timeKey, string.Empty);
 
-            var json = Preferences.Default.Get(cacheKey, string.Empty);
-            var timestampRaw = Preferences.Default.Get(timeKey, string.Empty);
+                if (string.IsNullOrWhiteSpace(json))
+                    return null;
 
-            if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(timestampRaw))
-                return null;
+                DateTime timestamp = DateTime.UtcNow;
 
-            if (!DateTime.TryParse(
-                    timestampRaw,
-                    null,
-                    System.Globalization.DateTimeStyles.RoundtripKind,
-                    out var timestamp))
+                if (!string.IsNullOrWhiteSpace(timestampRaw) &&
+                    DateTime.TryParse(
+                        timestampRaw,
+                        null,
+                        System.Globalization.DateTimeStyles.RoundtripKind,
+                        out var parsed))
+                {
+                    timestamp = parsed;
+                }
+
+                var data = JsonSerializer.Deserialize<List<PuntoRutaDto>>(json);
+
+                if (data is null || data.Count == 0)
+                    return null;
+
+                return (data, timestamp);
+            }
+            catch
             {
                 return null;
             }
-
-            if (CacheExpirado(timestamp))
-                return null;
-
-            var data = JsonSerializer.Deserialize<List<PuntoRutaDto>>(json);
-            if (data is null)
-                return null;
-
-            return (data, timestamp);
         }
     }
 }

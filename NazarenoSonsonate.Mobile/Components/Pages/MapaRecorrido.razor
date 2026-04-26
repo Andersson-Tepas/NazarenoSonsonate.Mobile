@@ -89,6 +89,8 @@
         text-align: center;
         z-index: 20;
         border: 1px solid rgba(252, 239, 214, 0.2);
+        max-width: 85%;
+        line-height: 1.45;
     }
 
     .selector-grupo-bar {
@@ -245,6 +247,14 @@
         {
             <div class="status-overlay">Recorrido pendiente de publicación.</div>
         }
+        else if (!mapaGoogleDisponible)
+        {
+            <div class="status-overlay">
+                <strong>Mapa no disponible sin internet</strong><br /><br />
+                @mensajeMapaOffline<br /><br />
+                El recorrido, puntos y última ubicación quedan guardados para cuando vuelva la conexión.
+            </div>
+        }
         else
         {
             <div id="mapa-recorrido"></div>
@@ -346,10 +356,7 @@
     private const string UltimasUbicacionesCachePrefix = "ultimas_ubicaciones_recorrido_";
     private const string UltimasUbicacionesCacheTimePrefix = "ultimas_ubicaciones_recorrido_time_";
 
-    // fresco: no pegarle a la API
     private static readonly TimeSpan UltimasUbicacionesCacheFresca = TimeSpan.FromMinutes(3);
-
-    // viejo: mostrar cache y refrescar detrás
     private static readonly TimeSpan UltimasUbicacionesCacheMaxima = TimeSpan.FromMinutes(20);
 
     private RecorridoDto? recorrido;
@@ -361,6 +368,9 @@
     private bool dependenciasMapaCargadas;
     private bool disposed;
     private bool refrescandoUltimasUbicaciones;
+
+    private bool mapaGoogleDisponible = true;
+    private string mensajeMapaOffline = "";
 
     private bool mostrandoProcesion = true;
 
@@ -393,6 +403,8 @@
             tipoSelectorGrupo = "";
             mostrandoProcesion = true;
             refrescandoUltimasUbicaciones = false;
+            mapaGoogleDisponible = true;
+            mensajeMapaOffline = "";
 
             puntosRutaCache = new();
             puntosPorTipoCache.Clear();
@@ -459,7 +471,8 @@
             mapaDibujado ||
             inicializandoMapa ||
             recorrido is null ||
-            string.IsNullOrWhiteSpace(recorrido.RutaGeoJson))
+            string.IsNullOrWhiteSpace(recorrido.RutaGeoJson) ||
+            !mapaGoogleDisponible)
         {
             return;
         }
@@ -470,7 +483,17 @@
         {
             await CargarDependenciasMapaAsync();
 
-            await JS.InvokeVoidAsync("mapaRecorrido.esperarGoogleMaps");
+            var googleMapsListo = await JS.InvokeAsync<bool>("mapaRecorrido.esperarGoogleMaps");
+
+            if (!googleMapsListo)
+            {
+                mapaGoogleDisponible = false;
+                mensajeMapaOffline = "Google Maps requiere conexión a internet para cargar el mapa.";
+                estadoTiempoReal = "MODO SIN CONEXIÓN";
+                mapaDibujado = true;
+                return;
+            }
+
             await JS.InvokeVoidAsync("mapaRecorrido.init", "mapa-recorrido", 13.7189, -89.7242, 16);
             await JS.InvokeVoidAsync("mapaRecorrido.drawGeoJson", recorrido.RutaGeoJson);
             await JS.InvokeVoidAsync("mapaRecorrido.drawPuntosRuta", puntosRutaCache);
@@ -505,11 +528,13 @@
         catch (JSDisconnectedException)
         {
         }
-        catch (Exception ex)
+        catch
         {
-            mapaDibujado = false;
-            error = ex.Message;
-            await InvokeAsync(StateHasChanged);
+            mapaDibujado = true;
+            mapaGoogleDisponible = false;
+            mensajeMapaOffline = "No se pudo cargar Google Maps. Revisa tu conexión a internet.";
+            estadoTiempoReal = "MODO SIN CONEXIÓN";
+            error = null;
         }
         finally
         {
@@ -554,12 +579,6 @@
     {
         var fecha = ObtenerFechaCache();
         return fecha.HasValue && DateTime.UtcNow - fecha.Value <= UltimasUbicacionesCacheFresca;
-    }
-
-    private bool CacheExistePeroYaVieja()
-    {
-        var fecha = ObtenerFechaCache();
-        return fecha.HasValue && DateTime.UtcNow - fecha.Value > UltimasUbicacionesCacheFresca;
     }
 
     private bool CacheEsDemasiadoVieja()
@@ -675,7 +694,7 @@
         {
             await CargarUltimasUbicacionesAsync();
 
-            if (mostrandoProcesion)
+            if (mostrandoProcesion && mapaGoogleDisponible)
             {
                 estadoTiempoReal = "ÚLTIMA UBICACIÓN ACTUALIZADA";
                 await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
@@ -703,9 +722,9 @@
     }};
 
     function loadScript(src, id) {{
-        return new Promise(function (resolve, reject) {{
+        return new Promise(function (resolve) {{
             if (document.getElementById(id)) {{
-                resolve();
+                resolve(true);
                 return;
             }}
 
@@ -714,8 +733,8 @@
             script.src = src;
             script.async = true;
             script.defer = true;
-            script.onload = function () {{ resolve(); }};
-            script.onerror = function () {{ reject(new Error('No se pudo cargar ' + src)); }};
+            script.onload = function () {{ resolve(true); }};
+            script.onerror = function () {{ resolve(false); }};
             document.body.appendChild(script);
         }});
     }}
@@ -816,6 +835,13 @@
     {
         mostrandoProcesion = true;
 
+        if (!mapaGoogleDisponible)
+        {
+            estadoTiempoReal = "MODO SIN CONEXIÓN";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
         var cacheAplicado = await CargarUltimasUbicacionesDesdeCacheAsync();
 
         if (CacheEstaFresca())
@@ -848,6 +874,10 @@
     private async Task FiltrarCargadores()
     {
         mostrandoProcesion = false;
+
+        if (!mapaGoogleDisponible)
+            return;
+
         await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
 
         _ = ObtenerPuntosPorTipoLocal("cargador");
@@ -863,6 +893,10 @@
     private async Task FiltrarCargadoras()
     {
         mostrandoProcesion = false;
+
+        if (!mapaGoogleDisponible)
+            return;
+
         await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
 
         _ = ObtenerPuntosPorTipoLocal("cargadora");
@@ -878,6 +912,10 @@
     private async Task FiltrarGrupo()
     {
         mostrandoProcesion = false;
+
+        if (!mapaGoogleDisponible)
+            return;
+
         await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
 
         if (string.IsNullOrWhiteSpace(tipoSelectorGrupo))
@@ -908,6 +946,9 @@
         grupoSeleccionadoActual = grupo;
         mostrarSelectorGrupo = false;
         filtroActivo = "grupo";
+
+        if (!mapaGoogleDisponible)
+            return;
 
         await JS.InvokeVoidAsync("mapaRecorrido.filtrarPorGrupoYTipo", tipoSelectorGrupo, grupo);
     }
@@ -965,14 +1006,17 @@
             if (disposed || dto.RecorridoId != Id)
                 return;
 
-            await JS.InvokeVoidAsync(
-                "mapaRecorrido.registrarUbicacionTiempoReal",
-                dto.TipoUnidad ?? "",
-                dto.Latitud,
-                dto.Longitud,
-                dto.GrupoActual ?? "",
-                dto.Mensaje ?? "",
-                dto.FechaHora.ToString("g"));
+            if (mapaGoogleDisponible)
+            {
+                await JS.InvokeVoidAsync(
+                    "mapaRecorrido.registrarUbicacionTiempoReal",
+                    dto.TipoUnidad ?? "",
+                    dto.Latitud,
+                    dto.Longitud,
+                    dto.GrupoActual ?? "",
+                    dto.Mensaje ?? "",
+                    dto.FechaHora.ToString("g"));
+            }
 
             try
             {
@@ -1005,7 +1049,7 @@
             {
             }
 
-            if (mostrandoProcesion)
+            if (mostrandoProcesion && mapaGoogleDisponible)
             {
                 estadoTiempoReal = "UBICACIÓN EN VIVO";
                 await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
@@ -1033,6 +1077,10 @@
         try
         {
             mostrandoProcesion = false;
+
+            if (!mapaGoogleDisponible)
+                return;
+
             await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
 
             var permiso = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
@@ -1088,7 +1136,7 @@
             hubConnection = null;
         }
 
-        if (dependenciasMapaCargadas)
+        if (dependenciasMapaCargadas && mapaGoogleDisponible)
         {
             try
             {

@@ -9,8 +9,9 @@ namespace NazarenoSonsonate.Mobile.Services
     {
         private readonly HttpClient _httpClient;
 
-        private const string RecorridosCacheKey = "recorridos_cache_v1";
-        private const string RecorridoDetallePrefix = "recorrido_detalle_";
+        private const string CacheVersion = "v2";
+        private const string RecorridosCacheKey = $"recorridos_cache_{CacheVersion}";
+        private const string RecorridoDetallePrefix = $"recorrido_detalle_{CacheVersion}_";
 
         private List<RecorridoDto>? _cacheRecorridos;
         private readonly Dictionary<int, RecorridoDto> _cachePorId = new();
@@ -52,14 +53,23 @@ namespace NazarenoSonsonate.Mobile.Services
                 if (listaLocal is not null && listaLocal.Count > 0)
                 {
                     CargarListaEnMemoria(listaLocal);
-                    return;
                 }
 
-                var result = await _httpClient.GetFromJsonAsync<List<RecorridoDto>>("api/recorridos")
-                             ?? new List<RecorridoDto>();
+                try
+                {
+                    var result = await _httpClient.GetFromJsonAsync<List<RecorridoDto>>("api/recorridos")
+                                 ?? new List<RecorridoDto>();
 
-                CargarListaEnMemoria(result);
-                GuardarListaEnPreferences(result);
+                    if (result.Count > 0)
+                    {
+                        CargarListaEnMemoria(result);
+                        GuardarListaEnPreferences(result);
+                    }
+                }
+                catch
+                {
+                    // Sin internet o API caída: se queda con cache local si existe.
+                }
             }
             finally
             {
@@ -72,27 +82,37 @@ namespace NazarenoSonsonate.Mobile.Services
             if (!forzarRecarga && _cacheRecorridos is not null && _cacheRecorridos.Count > 0)
                 return _cacheRecorridos;
 
-            if (!forzarRecarga)
-            {
-                var lista = LeerListaDesdePreferences();
+            var listaLocal = !forzarRecarga ? LeerListaDesdePreferences() : null;
 
-                if (lista is not null && lista.Count > 0)
-                {
-                    CargarListaEnMemoria(lista);
+            if (listaLocal is not null && listaLocal.Count > 0)
+            {
+                CargarListaEnMemoria(listaLocal);
+
+                if (!permitirApi)
                     return _cacheRecorridos!;
-                }
             }
 
             if (!permitirApi)
-                return new List<RecorridoDto>();
+                return _cacheRecorridos ?? new List<RecorridoDto>();
 
-            var result = await _httpClient.GetFromJsonAsync<List<RecorridoDto>>("api/recorridos")
-                         ?? new List<RecorridoDto>();
+            try
+            {
+                var result = await _httpClient.GetFromJsonAsync<List<RecorridoDto>>("api/recorridos")
+                             ?? new List<RecorridoDto>();
 
-            CargarListaEnMemoria(result);
-            GuardarListaEnPreferences(result);
+                if (result.Count > 0)
+                {
+                    CargarListaEnMemoria(result);
+                    GuardarListaEnPreferences(result);
+                    return _cacheRecorridos!;
+                }
+            }
+            catch
+            {
+                // Sin conexión: devolvemos cache si existe.
+            }
 
-            return _cacheRecorridos!;
+            return _cacheRecorridos ?? listaLocal ?? new List<RecorridoDto>();
         }
 
         public async Task<RecorridoDto?> ObtenerRecorridoPorIdAsync(int id, bool forzarRecarga = false, bool permitirApi = true)
@@ -100,15 +120,19 @@ namespace NazarenoSonsonate.Mobile.Services
             if (!forzarRecarga && _cachePorId.TryGetValue(id, out var cacheado))
                 return cacheado;
 
+            RecorridoDto? detalleLocal = null;
+
             if (!forzarRecarga)
             {
-                var detalleLocal = LeerDetalleDesdePreferences(id);
+                detalleLocal = LeerDetalleDesdePreferences(id);
 
                 if (detalleLocal is not null)
                 {
                     _cachePorId[id] = detalleLocal;
                     ActualizarListaCache(detalleLocal, guardarLista: false);
-                    return detalleLocal;
+
+                    if (!permitirApi)
+                        return detalleLocal;
                 }
 
                 if (_cacheRecorridos is null || _cacheRecorridos.Count == 0)
@@ -118,23 +142,37 @@ namespace NazarenoSonsonate.Mobile.Services
                         CargarListaEnMemoria(lista);
                 }
 
-                if (_cachePorId.TryGetValue(id, out cacheado))
+                if (_cachePorId.TryGetValue(id, out cacheado) && !permitirApi)
                     return cacheado;
             }
 
             if (!permitirApi)
-                return null;
+                return detalleLocal ?? (_cachePorId.TryGetValue(id, out cacheado) ? cacheado : null);
 
-            var result = await _httpClient.GetFromJsonAsync<RecorridoDto>($"api/recorridos/{id}");
-
-            if (result is not null)
+            try
             {
-                _cachePorId[id] = result;
-                ActualizarListaCache(result);
-                GuardarDetalleEnPreferences(result);
+                var result = await _httpClient.GetFromJsonAsync<RecorridoDto>($"api/recorridos/{id}");
+
+                if (result is not null)
+                {
+                    _cachePorId[id] = result;
+                    ActualizarListaCache(result);
+                    GuardarDetalleEnPreferences(result);
+                    return result;
+                }
+            }
+            catch
+            {
+                // Sin conexión: devolvemos cache si existe.
             }
 
-            return result;
+            if (detalleLocal is not null)
+                return detalleLocal;
+
+            if (_cachePorId.TryGetValue(id, out cacheado))
+                return cacheado;
+
+            return null;
         }
 
         public async Task GuardarRutaAsync(int id, string rutaGeoJson)
@@ -191,6 +229,7 @@ namespace NazarenoSonsonate.Mobile.Services
         {
             _cacheRecorridos = null;
             _cachePorId.Clear();
+
             Preferences.Default.Remove(RecorridosCacheKey);
         }
 
@@ -198,22 +237,36 @@ namespace NazarenoSonsonate.Mobile.Services
 
         private List<RecorridoDto>? LeerListaDesdePreferences()
         {
-            var cacheLocal = Preferences.Default.Get(RecorridosCacheKey, string.Empty);
+            try
+            {
+                var cacheLocal = Preferences.Default.Get(RecorridosCacheKey, string.Empty);
 
-            if (string.IsNullOrWhiteSpace(cacheLocal))
+                if (string.IsNullOrWhiteSpace(cacheLocal))
+                    return null;
+
+                return JsonSerializer.Deserialize<List<RecorridoDto>>(cacheLocal);
+            }
+            catch
+            {
                 return null;
-
-            return JsonSerializer.Deserialize<List<RecorridoDto>>(cacheLocal);
+            }
         }
 
         private RecorridoDto? LeerDetalleDesdePreferences(int id)
         {
-            var cacheLocal = Preferences.Default.Get(ObtenerDetalleKey(id), string.Empty);
+            try
+            {
+                var cacheLocal = Preferences.Default.Get(ObtenerDetalleKey(id), string.Empty);
 
-            if (string.IsNullOrWhiteSpace(cacheLocal))
+                if (string.IsNullOrWhiteSpace(cacheLocal))
+                    return null;
+
+                return JsonSerializer.Deserialize<RecorridoDto>(cacheLocal);
+            }
+            catch
+            {
                 return null;
-
-            return JsonSerializer.Deserialize<RecorridoDto>(cacheLocal);
+            }
         }
 
         private void CargarListaEnMemoria(List<RecorridoDto> lista)
@@ -229,8 +282,7 @@ namespace NazarenoSonsonate.Mobile.Services
 
         private void ActualizarListaCache(RecorridoDto recorrido, bool guardarLista = true)
         {
-            if (_cacheRecorridos is null)
-                return;
+            _cacheRecorridos ??= new List<RecorridoDto>();
 
             var index = _cacheRecorridos.FindIndex(x => x.Id == recorrido.Id);
 
@@ -245,24 +297,36 @@ namespace NazarenoSonsonate.Mobile.Services
 
         private void GuardarDetalleEnPreferences(RecorridoDto recorrido)
         {
-            var key = ObtenerDetalleKey(recorrido.Id);
-            var jsonNuevo = JsonSerializer.Serialize(recorrido);
-            var jsonActual = Preferences.Default.Get(key, string.Empty);
-
-            if (!string.Equals(jsonActual, jsonNuevo, StringComparison.Ordinal))
+            try
             {
-                Preferences.Default.Set(key, jsonNuevo);
+                var key = ObtenerDetalleKey(recorrido.Id);
+                var jsonNuevo = JsonSerializer.Serialize(recorrido);
+                var jsonActual = Preferences.Default.Get(key, string.Empty);
+
+                if (!string.Equals(jsonActual, jsonNuevo, StringComparison.Ordinal))
+                {
+                    Preferences.Default.Set(key, jsonNuevo);
+                }
+            }
+            catch
+            {
             }
         }
 
         private void GuardarListaEnPreferences(List<RecorridoDto> lista)
         {
-            var jsonNuevo = JsonSerializer.Serialize(lista);
-            var jsonActual = Preferences.Default.Get(RecorridosCacheKey, string.Empty);
-
-            if (!string.Equals(jsonActual, jsonNuevo, StringComparison.Ordinal))
+            try
             {
-                Preferences.Default.Set(RecorridosCacheKey, jsonNuevo);
+                var jsonNuevo = JsonSerializer.Serialize(lista);
+                var jsonActual = Preferences.Default.Get(RecorridosCacheKey, string.Empty);
+
+                if (!string.Equals(jsonActual, jsonNuevo, StringComparison.Ordinal))
+                {
+                    Preferences.Default.Set(RecorridosCacheKey, jsonNuevo);
+                }
+            }
+            catch
+            {
             }
         }
     }

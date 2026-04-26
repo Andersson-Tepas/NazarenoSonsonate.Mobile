@@ -35,8 +35,11 @@
         }
 
         if (!window.googleMapsReady || !window.google || !google.maps) {
-            throw new Error("Google Maps no terminó de cargar.");
+            console.warn("Google Maps no terminó de cargar.");
+            return false;
         }
+
+        return true;
     },
 
     init: function (elementId, lat, lng, zoom) {
@@ -584,7 +587,6 @@
                 lngNum
             );
 
-            // Ignorar saltos absurdos del GPS para no brincar a casas o puntos locos
             if (distancia > 120) {
                 return;
             }
@@ -599,7 +601,6 @@
             fechaHora
         };
 
-        // Aunque no estén visibles ahorita, ya queda guardada la última ubicación en memoria JS
         if (!this.andasVisibles) return;
 
         if (!ubicacionAnterior) {
