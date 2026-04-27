@@ -31,7 +31,7 @@ namespace NazarenoSonsonate.Api.Controllers
                 RecorridoId = recorridoId,
                 Latitud = 13.7185,
                 Longitud = -89.7240,
-                FechaHora = DateTime.Now,
+                FechaHora = DateTime.UtcNow,
                 GrupoActual = "Grupo central",
                 Mensaje = "Ubicación actual simulada",
                 TipoUnidad = "JesusNazareno"
@@ -54,7 +54,7 @@ namespace NazarenoSonsonate.Api.Controllers
                     RecorridoId = x.RecorridoId,
                     Latitud = x.Latitud,
                     Longitud = x.Longitud,
-                    FechaHora = x.FechaHora,
+                    FechaHora = DateTime.SpecifyKind(x.FechaHora, DateTimeKind.Utc),
                     GrupoActual = x.GrupoActual,
                     Mensaje = x.Mensaje,
                     TipoUnidad = x.TipoUnidad
@@ -73,7 +73,7 @@ namespace NazarenoSonsonate.Api.Controllers
             if (string.IsNullOrWhiteSpace(ubicacion.TipoUnidad))
                 return BadRequest("TipoUnidad es requerido.");
 
-            ubicacion.FechaHora = DateTime.Now;
+            ubicacion.FechaHora = DateTime.UtcNow;
 
             var existente = await _dbContext.UltimasUbicacionesProcesion
                 .FirstOrDefaultAsync(x =>

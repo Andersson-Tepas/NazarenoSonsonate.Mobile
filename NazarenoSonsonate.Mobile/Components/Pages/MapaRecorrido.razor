@@ -394,7 +394,7 @@
                                 <div class="offline-chip">
                                     @(ubicacion.TipoUnidad == "VirgenMaria" ? "Virgen María" : "Jesús Nazareno")
                                     <br />
-                                    <small>@ubicacion.FechaHora.ToString("g")</small>
+                                    <small>@FormatearHoraLocal(ubicacion.FechaHora)</small>
                                 </div>
                             }
                         </div>
@@ -584,6 +584,22 @@
             })
             .ThenBy(x => x)
             .ToList();
+
+    private string FormatearHoraLocal(DateTime fechaHora)
+    {
+        try
+        {
+            var fechaUtc = fechaHora.Kind == DateTimeKind.Utc
+                ? fechaHora
+                : DateTime.SpecifyKind(fechaHora, DateTimeKind.Utc);
+
+            return fechaUtc.ToLocalTime().ToString("g");
+        }
+        catch
+        {
+            return fechaHora.ToString("g");
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -893,7 +909,7 @@
                     dto.Longitud,
                     dto.GrupoActual ?? "",
                     dto.Mensaje ?? "",
-                    dto.FechaHora.ToString("g"));
+                    FormatearHoraLocal(dto.FechaHora));
             }
 
             return true;
@@ -959,7 +975,7 @@
                     dto.Longitud,
                     dto.GrupoActual ?? "",
                     dto.Mensaje ?? "",
-                    dto.FechaHora.ToString("g"));
+                    FormatearHoraLocal(dto.FechaHora));
             }
         }
         catch
@@ -1323,7 +1339,7 @@
                         dto.Longitud,
                         dto.GrupoActual ?? "",
                         dto.Mensaje ?? "",
-                        dto.FechaHora.ToString("g"));
+                        FormatearHoraLocal(dto.FechaHora));
                 }
 
                 try
