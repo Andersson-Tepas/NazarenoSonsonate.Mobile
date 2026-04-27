@@ -5,6 +5,7 @@
 @using Microsoft.Maui.ApplicationModel
 @using Microsoft.Maui.Devices.Sensors
 @using Microsoft.Maui.Storage
+@using Microsoft.Maui.Networking
 @using NazarenoSonsonate.Shared.DTOs
 @inject NazarenoSonsonate.Mobile.Services.RecorridoService RecorridoService
 @inject NazarenoSonsonate.Mobile.Services.PuntoRutaCacheService PuntoRutaCacheService
@@ -70,6 +71,7 @@
         width: 100%;
         height: 100%;
         position: relative;
+        overflow-y: auto;
     }
 
     #mapa-recorrido {
@@ -91,6 +93,93 @@
         border: 1px solid rgba(252, 239, 214, 0.2);
         max-width: 85%;
         line-height: 1.45;
+    }
+
+    .offline-view {
+        padding: 22px 16px 120px 16px;
+        color: #fcefd6;
+    }
+
+    .offline-card {
+        background: rgba(43, 0, 42, 0.92);
+        border: 1px solid rgba(252, 239, 214, 0.18);
+        border-radius: 18px;
+        padding: 18px;
+        margin-bottom: 14px;
+        box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+    }
+
+    .offline-title {
+        font-size: 22px;
+        font-family: Georgia, serif;
+        font-style: italic;
+        margin-bottom: 8px;
+    }
+
+    .offline-subtitle {
+        font-size: 13px;
+        color: #d8bdd7;
+        line-height: 1.5;
+    }
+
+    .offline-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .offline-stat {
+        background: rgba(255,255,255,0.08);
+        border-radius: 14px;
+        padding: 14px;
+        text-align: center;
+    }
+
+    .offline-stat-number {
+        font-size: 24px;
+        font-weight: 800;
+        color: #ffffff;
+    }
+
+    .offline-stat-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: #c7a8c5;
+        margin-top: 4px;
+    }
+
+    .offline-section-title {
+        font-size: 15px;
+        font-weight: 700;
+        margin-bottom: 10px;
+        color: #ffffff;
+    }
+
+    .offline-chip-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .offline-chip {
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.09);
+        border-radius: 999px;
+        font-size: 13px;
+        color: #fcefd6;
+    }
+
+    .offline-muted {
+        font-size: 13px;
+        color: #c7a8c5;
+        line-height: 1.45;
+    }
+
+    .offline-warning {
+        background: rgba(255, 193, 7, 0.12);
+        border: 1px solid rgba(255, 193, 7, 0.35);
+        color: #ffe9a3;
     }
 
     .selector-grupo-bar {
@@ -249,10 +338,96 @@
         }
         else if (!mapaGoogleDisponible)
         {
-            <div class="status-overlay">
-                <strong>Mapa no disponible sin internet</strong><br /><br />
-                @mensajeMapaOffline<br /><br />
-                El recorrido, puntos y última ubicación quedan guardados para cuando vuelva la conexión.
+            <div class="offline-view">
+                <div class="offline-card offline-warning">
+                    <div class="offline-title">Modo sin conexión</div>
+                    <div class="offline-subtitle">
+                        @mensajeMapaOffline<br />
+                        El mapa de Google y la ubicación en vivo necesitan internet, pero aquí puedes consultar la información guardada.
+                    </div>
+                </div>
+
+                <div class="offline-card">
+                    <div class="offline-title">@recorrido?.Nombre</div>
+                    <div class="offline-subtitle">
+                        Recorrido guardado localmente en este dispositivo.
+                    </div>
+
+                    <div class="offline-grid">
+                        <div class="offline-stat">
+                            <div class="offline-stat-number">@puntosRutaCache.Count</div>
+                            <div class="offline-stat-label">Puntos</div>
+                        </div>
+
+                        <div class="offline-stat">
+                            <div class="offline-stat-number">@CantidadTotalGrupos</div>
+                            <div class="offline-stat-label">Grupos</div>
+                        </div>
+
+                        <div class="offline-stat">
+                            <div class="offline-stat-number">@CantidadCargadores</div>
+                            <div class="offline-stat-label">Cargadores</div>
+                        </div>
+
+                        <div class="offline-stat">
+                            <div class="offline-stat-number">@CantidadCargadoras</div>
+                            <div class="offline-stat-label">Cargadoras</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="offline-card">
+                    <div class="offline-section-title">Última ubicación guardada</div>
+
+                    @if (ultimasUbicacionesOffline.Count == 0)
+                    {
+                        <div class="offline-muted">
+                            Todavía no hay última ubicación guardada para las andas.
+                            Entra una vez con internet para guardar la ubicación.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="offline-chip-wrap">
+                            @foreach (var ubicacion in ultimasUbicacionesOffline)
+                            {
+                                <div class="offline-chip">
+                                    @(ubicacion.TipoUnidad == "VirgenMaria" ? "Virgen María" : "Jesús Nazareno")
+                                    <br />
+                                    <small>@ubicacion.FechaHora.ToString("g")</small>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="offline-card">
+                    <div class="offline-section-title">Grupos guardados</div>
+
+                    @if (gruposOffline.Count == 0)
+                    {
+                        <div class="offline-muted">
+                            No hay grupos guardados todavía.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="offline-chip-wrap">
+                            @foreach (var grupo in gruposOffline)
+                            {
+                                <span class="offline-chip">Grupo @grupo</span>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="offline-card">
+                    <div class="offline-section-title">Importante</div>
+                    <div class="offline-muted">
+                        Para ver el mapa, filtrar visualmente los puntos y recibir ubicación en tiempo real,
+                        necesitas conexión a internet.
+                    </div>
+                </div>
             </div>
         }
         else
@@ -261,7 +436,7 @@
         }
     </div>
 
-    @if (filtroActivo == "grupo" && !string.IsNullOrWhiteSpace(tipoSelectorGrupo))
+    @if (filtroActivo == "grupo" && !string.IsNullOrWhiteSpace(tipoSelectorGrupo) && mapaGoogleDisponible)
     {
         <div class="selector-grupo-bar" @onclick="AbrirSelectorGrupo">
             <div class="selector-grupo-label">
@@ -368,6 +543,8 @@
     private bool dependenciasMapaCargadas;
     private bool disposed;
     private bool refrescandoUltimasUbicaciones;
+    private bool intentandoReconectarSignalR;
+    private bool monitorConexionActivo;
 
     private bool mapaGoogleDisponible = true;
     private string mensajeMapaOffline = "";
@@ -383,8 +560,30 @@
     private string tipoSelectorGrupo = "";
 
     private List<PuntoRutaDto> puntosRutaCache = new();
+    private List<UbicacionProcesionDto> ultimasUbicacionesOffline = new();
+
     private readonly Dictionary<string, List<PuntoRutaDto>> puntosPorTipoCache = new();
     private readonly Dictionary<string, List<string>> gruposPorTipoCache = new();
+
+    private int CantidadCargadores => ObtenerPuntosPorTipoLocal("cargador").Count;
+    private int CantidadCargadoras => ObtenerPuntosPorTipoLocal("cargadora").Count;
+
+    private int CantidadTotalGrupos => gruposOffline.Count;
+
+    private List<string> gruposOffline =>
+        puntosRutaCache
+            .Where(x => !string.IsNullOrWhiteSpace(x.Grupo))
+            .Select(x => x.Grupo!.Trim())
+            .Distinct()
+            .OrderBy(x =>
+            {
+                if (int.TryParse(x, out var numero))
+                    return numero;
+
+                return int.MaxValue;
+            })
+            .ThenBy(x => x)
+            .ToList();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -403,8 +602,10 @@
             tipoSelectorGrupo = "";
             mostrandoProcesion = true;
             refrescandoUltimasUbicaciones = false;
+            intentandoReconectarSignalR = false;
             mapaGoogleDisponible = true;
             mensajeMapaOffline = "";
+            ultimasUbicacionesOffline = new();
 
             puntosRutaCache = new();
             puntosPorTipoCache.Clear();
@@ -454,6 +655,8 @@
             }
 
             ConstruirCacheLocal();
+            CargarUltimasUbicacionesOffline();
+            ActivarMonitorConexion();
         }
         catch (Exception ex)
         {
@@ -481,6 +684,15 @@
 
         try
         {
+            if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
+            {
+                mapaGoogleDisponible = false;
+                mensajeMapaOffline = "No tienes conexión a internet. Se muestra la información guardada.";
+                estadoTiempoReal = "ÚLTIMA UBICACIÓN GUARDADA - SIN INTERNET";
+                mapaDibujado = true;
+                return;
+            }
+
             await CargarDependenciasMapaAsync();
 
             var googleMapsListo = await JS.InvokeAsync<bool>("mapaRecorrido.esperarGoogleMaps");
@@ -543,6 +755,47 @@
         }
     }
 
+    private void ActivarMonitorConexion()
+    {
+        if (monitorConexionActivo)
+            return;
+
+        Connectivity.Current.ConnectivityChanged += OnConnectivityChanged;
+        monitorConexionActivo = true;
+    }
+
+    private async void OnConnectivityChanged(object? sender, ConnectivityChangedEventArgs e)
+    {
+        if (disposed)
+            return;
+
+        if (e.NetworkAccess == NetworkAccess.Internet)
+        {
+            estadoTiempoReal = "RECONECTANDO...";
+            mapaGoogleDisponible = true;
+            mensajeMapaOffline = "";
+            mapaDibujado = false;
+            dependenciasMapaCargadas = false;
+
+            await InvokeAsync(StateHasChanged);
+
+            if (hubConnection is null ||
+                hubConnection.State == HubConnectionState.Disconnected)
+            {
+                await IniciarTiempoReal();
+            }
+        }
+        else
+        {
+            estadoTiempoReal = "ÚLTIMA UBICACIÓN GUARDADA - SIN INTERNET";
+            mapaGoogleDisponible = false;
+            mensajeMapaOffline = "No tienes conexión a internet. Se muestra la información guardada.";
+            mapaDibujado = true;
+
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
     private string ObtenerUltimasUbicacionesCacheKey()
         => $"{UltimasUbicacionesCachePrefix}{Id}";
 
@@ -587,6 +840,27 @@
         return !fecha.HasValue || DateTime.UtcNow - fecha.Value > UltimasUbicacionesCacheMaxima;
     }
 
+    private void CargarUltimasUbicacionesOffline()
+    {
+        try
+        {
+            var json = Preferences.Default.Get(ObtenerUltimasUbicacionesCacheKey(), string.Empty);
+
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                ultimasUbicacionesOffline = new();
+                return;
+            }
+
+            ultimasUbicacionesOffline = JsonSerializer.Deserialize<List<UbicacionProcesionDto>>(json)
+                ?? new List<UbicacionProcesionDto>();
+        }
+        catch
+        {
+            ultimasUbicacionesOffline = new();
+        }
+    }
+
     private async Task<bool> CargarUltimasUbicacionesDesdeCacheAsync()
     {
         try
@@ -601,6 +875,8 @@
 
             if (ultimas is null || ultimas.Count == 0)
                 return false;
+
+            ultimasUbicacionesOffline = ultimas;
 
             foreach (var dto in ultimas)
             {
@@ -639,6 +915,8 @@
             Preferences.Default.Set(
                 ObtenerUltimasUbicacionesCacheTimeKey(),
                 DateTime.UtcNow.ToString("O"));
+
+            ultimasUbicacionesOffline = ubicaciones;
         }
         catch
         {
@@ -651,6 +929,9 @@
     {
         try
         {
+            if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
+                return;
+
             var ultimas = await Http.GetFromJsonAsync<List<UbicacionProcesionDto>>($"api/ubicacion/ultimas/{Id}");
 
             if (ultimas is null || ultimas.Count == 0)
@@ -668,6 +949,9 @@
 
             foreach (var dto in filtradas)
             {
+                if (!mapaGoogleDisponible)
+                    continue;
+
                 await JS.InvokeVoidAsync(
                     "mapaRecorrido.registrarUbicacionTiempoReal",
                     dto.TipoUnidad ?? "",
@@ -686,6 +970,9 @@
     private async Task RefrescarUltimasUbicacionesDesdeApiEnSegundoPlanoAsync()
     {
         if (refrescandoUltimasUbicaciones)
+            return;
+
+        if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
             return;
 
         refrescandoUltimasUbicaciones = true;
@@ -837,7 +1124,10 @@
 
         if (!mapaGoogleDisponible)
         {
-            estadoTiempoReal = "MODO SIN CONEXIÓN";
+            estadoTiempoReal = Connectivity.Current.NetworkAccess == NetworkAccess.Internet
+                ? "RECONECTANDO..."
+                : "ÚLTIMA UBICACIÓN GUARDADA - SIN INTERNET";
+
             await InvokeAsync(StateHasChanged);
             return;
         }
@@ -955,121 +1245,161 @@
 
     private async Task IniciarTiempoReal()
     {
-        if (disposed || hubConnection is not null)
+        if (disposed || hubConnection is not null || intentandoReconectarSignalR)
             return;
 
-        if (Http.BaseAddress is null)
+        if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
         {
-            estadoTiempoReal = "No se pudo resolver la URL de la API.";
+            estadoTiempoReal = "ÚLTIMA UBICACIÓN GUARDADA - SIN INTERNET";
+            ActivarMonitorConexion();
             await InvokeAsync(StateHasChanged);
             return;
         }
 
-        var hubUrl = new Uri(Http.BaseAddress, "hubs/procesion");
+        intentandoReconectarSignalR = true;
 
-        hubConnection = new HubConnectionBuilder()
-            .WithUrl(hubUrl.ToString())
-            .WithAutomaticReconnect()
-            .Build();
-
-        hubConnection.Reconnecting += _ =>
+        try
         {
-            estadoTiempoReal = "RECONECTANDO...";
-            return InvokeAsync(StateHasChanged);
-        };
+            if (Http.BaseAddress is null)
+            {
+                estadoTiempoReal = "No se pudo resolver la URL de la API.";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
 
-        hubConnection.Reconnected += _ =>
-        {
+            var hubUrl = new Uri(Http.BaseAddress, "hubs/procesion");
+
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(hubUrl.ToString())
+                .WithAutomaticReconnect()
+                .Build();
+
+            hubConnection.Reconnecting += _ =>
+            {
+                estadoTiempoReal = "RECONECTANDO...";
+                return InvokeAsync(StateHasChanged);
+            };
+
+            hubConnection.Reconnected += async _ =>
+            {
+                try
+                {
+                    await hubConnection.InvokeAsync("UnirseRecorrido", Id);
+                }
+                catch
+                {
+                }
+
+                estadoTiempoReal = mostrandoProcesion
+                    ? "UBICACIÓN EN VIVO"
+                    : "ÚLTIMA UBICACIÓN VISIBLE";
+
+                await InvokeAsync(StateHasChanged);
+            };
+
+            hubConnection.Closed += async _ =>
+            {
+                if (!disposed)
+                {
+                    estadoTiempoReal = Connectivity.Current.NetworkAccess == NetworkAccess.Internet
+                        ? "MOSTRANDO ÚLTIMA UBICACIÓN"
+                        : "ÚLTIMA UBICACIÓN GUARDADA - SIN INTERNET";
+
+                    await InvokeAsync(StateHasChanged);
+                }
+            };
+
+            hubConnection.On<UbicacionProcesionDto>("RecibirUbicacion", async dto =>
+            {
+                if (disposed || dto.RecorridoId != Id)
+                    return;
+
+                if (mapaGoogleDisponible)
+                {
+                    await JS.InvokeVoidAsync(
+                        "mapaRecorrido.registrarUbicacionTiempoReal",
+                        dto.TipoUnidad ?? "",
+                        dto.Latitud,
+                        dto.Longitud,
+                        dto.GrupoActual ?? "",
+                        dto.Mensaje ?? "",
+                        dto.FechaHora.ToString("g"));
+                }
+
+                try
+                {
+                    var cacheKey = ObtenerUltimasUbicacionesCacheKey();
+                    var json = Preferences.Default.Get(cacheKey, string.Empty);
+                    var actuales = string.IsNullOrWhiteSpace(json)
+                        ? new List<UbicacionProcesionDto>()
+                        : JsonSerializer.Deserialize<List<UbicacionProcesionDto>>(json) ?? new List<UbicacionProcesionDto>();
+
+                    var existente = actuales.FirstOrDefault(x => x.TipoUnidad == dto.TipoUnidad);
+
+                    if (existente is null)
+                    {
+                        actuales.Add(dto);
+                    }
+                    else
+                    {
+                        existente.Latitud = dto.Latitud;
+                        existente.Longitud = dto.Longitud;
+                        existente.FechaHora = dto.FechaHora;
+                        existente.GrupoActual = dto.GrupoActual;
+                        existente.Mensaje = dto.Mensaje;
+                        existente.RecorridoId = dto.RecorridoId;
+                        existente.TipoUnidad = dto.TipoUnidad;
+                    }
+
+                    await GuardarUltimasUbicacionesEnCacheAsync(actuales);
+                }
+                catch
+                {
+                }
+
+                if (mostrandoProcesion && mapaGoogleDisponible)
+                {
+                    estadoTiempoReal = "UBICACIÓN EN VIVO";
+                    await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            await hubConnection.StartAsync();
+            await hubConnection.InvokeAsync("UnirseRecorrido", Id);
+
+            if (CacheEsDemasiadoVieja())
+            {
+                _ = RefrescarUltimasUbicacionesDesdeApiEnSegundoPlanoAsync();
+            }
+
             estadoTiempoReal = mostrandoProcesion
                 ? "UBICACIÓN EN VIVO"
                 : "ÚLTIMA UBICACIÓN VISIBLE";
 
-            return InvokeAsync(StateHasChanged);
-        };
-
-        hubConnection.Closed += _ =>
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
         {
-            if (!disposed)
-            {
-                estadoTiempoReal = mostrandoProcesion
-                    ? "MOSTRANDO ÚLTIMA UBICACIÓN"
-                    : "CONEXIÓN PAUSADA";
-
-                return InvokeAsync(StateHasChanged);
-            }
-
-            return Task.CompletedTask;
-        };
-
-        hubConnection.On<UbicacionProcesionDto>("RecibirUbicacion", async dto =>
-        {
-            if (disposed || dto.RecorridoId != Id)
-                return;
-
-            if (mapaGoogleDisponible)
-            {
-                await JS.InvokeVoidAsync(
-                    "mapaRecorrido.registrarUbicacionTiempoReal",
-                    dto.TipoUnidad ?? "",
-                    dto.Latitud,
-                    dto.Longitud,
-                    dto.GrupoActual ?? "",
-                    dto.Mensaje ?? "",
-                    dto.FechaHora.ToString("g"));
-            }
+            estadoTiempoReal = "ÚLTIMA UBICACIÓN GUARDADA";
+            await InvokeAsync(StateHasChanged);
 
             try
             {
-                var cacheKey = ObtenerUltimasUbicacionesCacheKey();
-                var json = Preferences.Default.Get(cacheKey, string.Empty);
-                var actuales = string.IsNullOrWhiteSpace(json)
-                    ? new List<UbicacionProcesionDto>()
-                    : JsonSerializer.Deserialize<List<UbicacionProcesionDto>>(json) ?? new List<UbicacionProcesionDto>();
-
-                var existente = actuales.FirstOrDefault(x => x.TipoUnidad == dto.TipoUnidad);
-
-                if (existente is null)
+                if (hubConnection is not null)
                 {
-                    actuales.Add(dto);
+                    await hubConnection.DisposeAsync();
+                    hubConnection = null;
                 }
-                else
-                {
-                    existente.Latitud = dto.Latitud;
-                    existente.Longitud = dto.Longitud;
-                    existente.FechaHora = dto.FechaHora;
-                    existente.GrupoActual = dto.GrupoActual;
-                    existente.Mensaje = dto.Mensaje;
-                    existente.RecorridoId = dto.RecorridoId;
-                    existente.TipoUnidad = dto.TipoUnidad;
-                }
-
-                await GuardarUltimasUbicacionesEnCacheAsync(actuales);
             }
             catch
             {
             }
-
-            if (mostrandoProcesion && mapaGoogleDisponible)
-            {
-                estadoTiempoReal = "UBICACIÓN EN VIVO";
-                await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
-                await InvokeAsync(StateHasChanged);
-            }
-        });
-
-        await hubConnection.StartAsync();
-        await hubConnection.InvokeAsync("UnirseRecorrido", Id);
-
-        if (CacheEsDemasiadoVieja())
-        {
-            _ = RefrescarUltimasUbicacionesDesdeApiEnSegundoPlanoAsync();
         }
-
-        estadoTiempoReal = mostrandoProcesion
-            ? "UBICACIÓN EN VIVO"
-            : "ÚLTIMA UBICACIÓN VISIBLE";
-
-        await InvokeAsync(StateHasChanged);
+        finally
+        {
+            intentandoReconectarSignalR = false;
+        }
     }
 
     private async Task MostrarMiUbicacion()
@@ -1114,6 +1444,12 @@
     public async ValueTask DisposeAsync()
     {
         disposed = true;
+
+        if (monitorConexionActivo)
+        {
+            Connectivity.Current.ConnectivityChanged -= OnConnectivityChanged;
+            monitorConexionActivo = false;
+        }
 
         if (hubConnection is not null)
         {

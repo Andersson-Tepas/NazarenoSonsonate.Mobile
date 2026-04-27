@@ -6,6 +6,7 @@ namespace NazarenoSonsonate.Mobile.Services
     public class SignalRService
     {
         private HubConnection? _hubConnection;
+        private int? _recorridoActualId;
 
         public event Action<UbicacionProcesionDto>? UbicacionRecibida;
         public event Action<string>? EstadoConexionCambiado;
@@ -31,7 +32,7 @@ namespace NazarenoSonsonate.Mobile.Services
                 }
 
                 _hubConnection = new HubConnectionBuilder()
-                    .WithUrl($"{baseUrl}hubs/procesion")
+                    .WithUrl($"{baseUrl.TrimEnd('/')}/hubs/procesion")
                     .WithAutomaticReconnect()
                     .Build();
 
@@ -41,10 +42,20 @@ namespace NazarenoSonsonate.Mobile.Services
                     return Task.CompletedTask;
                 };
 
-                _hubConnection.Reconnected += _ =>
+                _hubConnection.Reconnected += async _ =>
                 {
                     EstadoConexionCambiado?.Invoke("CONECTADO");
-                    return Task.CompletedTask;
+
+                    if (_recorridoActualId.HasValue)
+                    {
+                        try
+                        {
+                            await _hubConnection.InvokeAsync("UnirseRecorrido", _recorridoActualId.Value);
+                        }
+                        catch
+                        {
+                        }
+                    }
                 };
 
                 _hubConnection.Closed += _ =>
@@ -68,6 +79,39 @@ namespace NazarenoSonsonate.Mobile.Services
             }
         }
 
+        public async Task UnirseRecorridoAsync(int recorridoId)
+        {
+            _recorridoActualId = recorridoId;
+
+            if (_hubConnection?.State != HubConnectionState.Connected)
+                return;
+
+            try
+            {
+                await _hubConnection.InvokeAsync("UnirseRecorrido", recorridoId);
+            }
+            catch
+            {
+            }
+        }
+
+        public async Task SalirRecorridoAsync(int recorridoId)
+        {
+            if (_hubConnection?.State != HubConnectionState.Connected)
+                return;
+
+            try
+            {
+                await _hubConnection.InvokeAsync("SalirRecorrido", recorridoId);
+            }
+            catch
+            {
+            }
+
+            if (_recorridoActualId == recorridoId)
+                _recorridoActualId = null;
+        }
+
         public async Task DetenerAsync()
         {
             if (_hubConnection is null)
@@ -80,6 +124,7 @@ namespace NazarenoSonsonate.Mobile.Services
             finally
             {
                 _hubConnection = null;
+                _recorridoActualId = null;
                 EstadoConexionCambiado?.Invoke("DESCONECTADO");
             }
         }
