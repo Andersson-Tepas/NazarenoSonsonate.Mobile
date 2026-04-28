@@ -26,6 +26,8 @@
     animacionesTiempoReal: {},
     autoCentrarProcesion: true,
 
+    andaInfoActivaStorageKey: "nazareno_anda_info_activa",
+
     esperarGoogleMaps: async function () {
         let intentos = 0;
 
@@ -308,6 +310,33 @@
         return tipoUnidad === "VirgenMaria"
             ? "Virgen María"
             : "Jesús Nazareno";
+    },
+
+    guardarAndaInfoActiva: function (tipoUnidad) {
+        try {
+            localStorage.setItem(this.andaInfoActivaStorageKey, tipoUnidad || "");
+        } catch {
+        }
+    },
+
+    obtenerAndaInfoActiva: function () {
+        try {
+            return localStorage.getItem(this.andaInfoActivaStorageKey) || "";
+        } catch {
+            return "";
+        }
+    },
+
+    abrirInfoAnda: function (tipoUnidad, marker) {
+        if (!this.map || !marker || !tipoUnidad) return;
+
+        const titulo = this.obtenerTituloUnidad(tipoUnidad);
+
+        this.infoTiempoReal.setContent(`
+            <strong style="font-size:14px; white-space:nowrap;">${titulo}</strong>
+        `);
+
+        this.infoTiempoReal.open(this.map, marker);
     },
 
     limpiarPuntosRuta: function () {
@@ -638,13 +667,8 @@
             });
 
             marker.addListener("click", () => {
-                this.infoTiempoReal.setContent(`
-                    <div style="min-width:140px">
-                        <strong>${titulo}</strong>
-                    </div>
-                `);
-
-                this.infoTiempoReal.open(this.map, marker);
+                this.guardarAndaInfoActiva(tipoUnidad);
+                this.abrirInfoAnda(tipoUnidad, marker);
             });
 
             this.marcadoresTiempoReal[tipoUnidad] = marker;
@@ -652,6 +676,14 @@
             marker.setPosition(position);
             marker.setTitle(titulo);
             marker.setMap(this.map);
+        }
+
+        const andaInfoActiva = this.obtenerAndaInfoActiva();
+
+        if (andaInfoActiva === tipoUnidad) {
+            setTimeout(() => {
+                this.abrirInfoAnda(tipoUnidad, marker);
+            }, 250);
         }
 
         if (centrar && this.autoCentrarProcesion) {
