@@ -306,8 +306,8 @@
 
     obtenerTituloUnidad: function (tipoUnidad) {
         return tipoUnidad === "VirgenMaria"
-            ? "Anda Virgen María"
-            : "Anda Jesús Nazareno";
+            ? "Virgen María"
+            : "Jesús Nazareno";
     },
 
     limpiarPuntosRuta: function () {
@@ -638,14 +638,9 @@
             });
 
             marker.addListener("click", () => {
-                const actual = this.ubicacionesTiempoReal[tipoUnidad];
-
                 this.infoTiempoReal.setContent(`
-                    <div style="min-width:170px">
-                        <strong>${titulo}</strong><br/>
-                        ${actual?.grupoActual || ""}${actual?.grupoActual ? "<br/>" : ""}
-                        ${actual?.mensaje || ""}${actual?.mensaje ? "<br/>" : ""}
-                        ${actual?.fechaHora || ""}
+                    <div style="min-width:140px">
+                        <strong>${titulo}</strong>
                     </div>
                 `);
 

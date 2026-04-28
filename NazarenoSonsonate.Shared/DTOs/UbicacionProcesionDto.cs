@@ -14,8 +14,9 @@ namespace NazarenoSonsonate.Shared.DTOs
         public DateTime FechaHora { get; set; }
         public string? GrupoActual { get; set; } = string.Empty;
         public string? Mensaje { get; set; } = string.Empty;
-
-        // NUEVO: identifica qué anda es
         public string? TipoUnidad { get; set; } = string.Empty;
+
+        // Precisión GPS en metros. Solo viaja en el DTO, no requiere migración.
+        public double? PrecisionMetros { get; set; }
     }
 }

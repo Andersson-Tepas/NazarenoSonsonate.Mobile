@@ -15,6 +15,8 @@ namespace NazarenoSonsonate.Api.Controllers
         private readonly IHubContext<ProcesionHub> _hubContext;
         private readonly AppDbContext _dbContext;
 
+        private const double PrecisionMaximaAceptableMetros = 25.0;
+
         public UbicacionController(
             IHubContext<ProcesionHub> hubContext,
             AppDbContext dbContext)
@@ -34,7 +36,8 @@ namespace NazarenoSonsonate.Api.Controllers
                 FechaHora = DateTime.UtcNow,
                 GrupoActual = "Grupo central",
                 Mensaje = "Ubicación actual simulada",
-                TipoUnidad = "JesusNazareno"
+                TipoUnidad = "JesusNazareno",
+                PrecisionMetros = null
             };
 
             return Ok(ubicacion);
@@ -57,7 +60,8 @@ namespace NazarenoSonsonate.Api.Controllers
                     FechaHora = DateTime.SpecifyKind(x.FechaHora, DateTimeKind.Utc),
                     GrupoActual = x.GrupoActual,
                     Mensaje = x.Mensaje,
-                    TipoUnidad = x.TipoUnidad
+                    TipoUnidad = x.TipoUnidad,
+                    PrecisionMetros = null
                 })
                 .ToListAsync();
 
@@ -72,6 +76,15 @@ namespace NazarenoSonsonate.Api.Controllers
 
             if (string.IsNullOrWhiteSpace(ubicacion.TipoUnidad))
                 return BadRequest("TipoUnidad es requerido.");
+
+            if (!EsCoordenadaValida(ubicacion.Latitud, ubicacion.Longitud))
+                return BadRequest("Latitud y longitud inválidas.");
+
+            if (!ubicacion.PrecisionMetros.HasValue)
+                return BadRequest("La precisión GPS es requerida.");
+
+            if (ubicacion.PrecisionMetros.Value > PrecisionMaximaAceptableMetros)
+                return BadRequest($"Precisión GPS insuficiente. Precisión actual: {ubicacion.PrecisionMetros.Value:0} m.");
 
             ubicacion.FechaHora = DateTime.UtcNow;
 
@@ -114,6 +127,26 @@ namespace NazarenoSonsonate.Api.Controllers
             {
                 mensaje = "Ubicación enviada correctamente"
             });
+        }
+
+        private static bool EsCoordenadaValida(double latitud, double longitud)
+        {
+            if (double.IsNaN(latitud) || double.IsNaN(longitud))
+                return false;
+
+            if (double.IsInfinity(latitud) || double.IsInfinity(longitud))
+                return false;
+
+            if (latitud == 0 && longitud == 0)
+                return false;
+
+            if (latitud < -90 || latitud > 90)
+                return false;
+
+            if (longitud < -180 || longitud > 180)
+                return false;
+
+            return true;
         }
     }
 }

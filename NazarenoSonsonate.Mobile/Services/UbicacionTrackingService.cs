@@ -30,13 +30,18 @@ namespace NazarenoSonsonate.Mobile.Services
         public DateTime? UltimaHoraEnvio { get; private set; }
         public string Estado { get; private set; } = "DETENIDO";
         public string? Error { get; private set; }
+        public double? UltimaPrecisionMetros { get; private set; }
 
         public event Action? OnStateChanged;
 
         private const double DistanciaMinimaMetros = 8.0;
         private const double PrecisionMaximaAceptableMetros = 25.0;
+        private const int ReintentosGpsPorCiclo = 3;
+
         private static readonly TimeSpan IntervaloLectura = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan TiempoMaximoSinEnviar = TimeSpan.FromSeconds(20);
+        private static readonly TimeSpan TimeoutGpsPorIntento = TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan EsperaEntreReintentosGps = TimeSpan.FromSeconds(2);
 
         public UbicacionTrackingService(UbicacionService ubicacionService)
         {
@@ -55,6 +60,7 @@ namespace NazarenoSonsonate.Mobile.Services
 
             Estado = "SOLICITANDO PERMISOS...";
             Error = null;
+            UltimaPrecisionMetros = null;
             NotifyStateChanged();
 
             var permiso = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
@@ -78,6 +84,7 @@ namespace NazarenoSonsonate.Mobile.Services
             IsTracking = true;
             _ultimaUbicacionEnviada = null;
             UltimaHoraEnvio = null;
+            UltimaPrecisionMetros = null;
 
             StartForegroundService();
             NotifyStateChanged();
@@ -116,6 +123,7 @@ namespace NazarenoSonsonate.Mobile.Services
             _cts = null;
             _trackingTask = null;
             _ultimaUbicacionEnviada = null;
+            UltimaPrecisionMetros = null;
 
             StopForegroundService();
 
@@ -147,26 +155,12 @@ namespace NazarenoSonsonate.Mobile.Services
                         continue;
                     }
 
-                    var request = new GeolocationRequest(
-                        GeolocationAccuracy.Best,
-                        TimeSpan.FromSeconds(10));
-
-                    var location = await Geolocation.Default.GetLocationAsync(request);
+                    var location = await ObtenerUbicacionConMejorPrecisionAsync(cancellationToken);
 
                     if (location is null)
                     {
-                        Estado = "SIN SEÑAL GPS";
-                        Error = "No se pudo obtener la ubicación actual.";
-                        NotifyStateChanged();
-
-                        await Task.Delay(IntervaloLectura, cancellationToken);
-                        continue;
-                    }
-
-                    if (!EsUbicacionConfiable(location))
-                    {
-                        Estado = "GPS IMPRECISO";
-                        Error = "La ubicación actual no tiene precisión suficiente.";
+                        Estado = "ESPERANDO MEJOR PRECISIÓN GPS";
+                        Error = "Aún no se obtuvo una ubicación confiable. Mantén el teléfono con vista al cielo o cerca de una ventana.";
                         NotifyStateChanged();
 
                         await Task.Delay(IntervaloLectura, cancellationToken);
@@ -196,7 +190,10 @@ namespace NazarenoSonsonate.Mobile.Services
                     if (!debeEnviarPorDistancia && !debeEnviarPorTiempo)
                     {
                         Estado = "ESPERANDO MOVIMIENTO...";
-                        Error = null;
+                        Error = UltimaPrecisionMetros.HasValue
+                            ? $"GPS correcto. Precisión actual: {UltimaPrecisionMetros.Value:0} m."
+                            : null;
+
                         NotifyStateChanged();
 
                         await Task.Delay(IntervaloLectura, cancellationToken);
@@ -204,7 +201,10 @@ namespace NazarenoSonsonate.Mobile.Services
                     }
 
                     Estado = "ENVIANDO UBICACIÓN...";
-                    Error = null;
+                    Error = UltimaPrecisionMetros.HasValue
+                        ? $"Precisión GPS: {UltimaPrecisionMetros.Value:0} m."
+                        : null;
+
                     NotifyStateChanged();
 
                     var nombreUnidad = TipoUnidad == "VirgenMaria"
@@ -222,13 +222,17 @@ namespace NazarenoSonsonate.Mobile.Services
                     {
                         _ultimaUbicacionEnviada = location;
                         UltimaHoraEnvio = DateTime.Now;
+                        UltimaPrecisionMetros = location.Accuracy;
+
                         Estado = "RASTREO ACTIVO";
-                        Error = null;
+                        Error = UltimaPrecisionMetros.HasValue
+                            ? $"Última precisión enviada: {UltimaPrecisionMetros.Value:0} m."
+                            : null;
                     }
                     else
                     {
                         Estado = "ERROR DE ENVÍO";
-                        Error = "No se pudo enviar la ubicación al servidor.";
+                        Error = "No se pudo enviar la ubicación. Puede ser por conexión o precisión GPS insuficiente.";
                     }
 
                     NotifyStateChanged();
@@ -258,6 +262,76 @@ namespace NazarenoSonsonate.Mobile.Services
             }
         }
 
+        private async Task<Location?> ObtenerUbicacionConMejorPrecisionAsync(CancellationToken cancellationToken)
+        {
+            Location? mejorUbicacion = null;
+
+            for (var intento = 1; intento <= ReintentosGpsPorCiclo; intento++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                Estado = intento == 1
+                    ? "LEYENDO GPS..."
+                    : $"MEJORANDO PRECISIÓN GPS ({intento}/{ReintentosGpsPorCiclo})...";
+
+                Error = mejorUbicacion?.Accuracy is not null
+                    ? $"Precisión actual: {mejorUbicacion.Accuracy.Value:0} m. Esperando máximo {PrecisionMaximaAceptableMetros:0} m."
+                    : "Buscando señal GPS precisa...";
+
+                NotifyStateChanged();
+
+                Location? location = null;
+
+                try
+                {
+                    var request = new GeolocationRequest(
+                        GeolocationAccuracy.Best,
+                        TimeoutGpsPorIntento);
+
+                    location = await Geolocation.Default.GetLocationAsync(request, cancellationToken);
+                }
+                catch
+                {
+                    location = null;
+                }
+
+                if (location is not null)
+                {
+                    UltimaPrecisionMetros = location.Accuracy;
+
+                    if (EsMejorUbicacion(location, mejorUbicacion))
+                        mejorUbicacion = location;
+
+                    if (EsUbicacionConfiable(location))
+                        return location;
+                }
+
+                if (intento < ReintentosGpsPorCiclo)
+                    await Task.Delay(EsperaEntreReintentosGps, cancellationToken);
+            }
+
+            UltimaPrecisionMetros = mejorUbicacion?.Accuracy;
+
+            if (mejorUbicacion is not null && EsUbicacionConfiable(mejorUbicacion))
+                return mejorUbicacion;
+
+            return null;
+        }
+
+        private static bool EsMejorUbicacion(Location nueva, Location? actual)
+        {
+            if (actual is null)
+                return true;
+
+            if (!nueva.Accuracy.HasValue)
+                return false;
+
+            if (!actual.Accuracy.HasValue)
+                return true;
+
+            return nueva.Accuracy.Value < actual.Accuracy.Value;
+        }
+
         private static bool EsUbicacionConfiable(Location location)
         {
             if (double.IsNaN(location.Latitude) || double.IsNaN(location.Longitude))
@@ -275,7 +349,10 @@ namespace NazarenoSonsonate.Mobile.Services
             if (location.Longitude < -180 || location.Longitude > 180)
                 return false;
 
-            if (location.Accuracy.HasValue && location.Accuracy.Value > PrecisionMaximaAceptableMetros)
+            if (!location.Accuracy.HasValue)
+                return false;
+
+            if (location.Accuracy.Value > PrecisionMaximaAceptableMetros)
                 return false;
 
             return true;

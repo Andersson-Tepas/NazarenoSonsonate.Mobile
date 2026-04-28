@@ -504,7 +504,14 @@
     private string estadoRastreo => TrackingService.Estado;
     private string? errorRastreo => TrackingService.Error;
     private DateTime? ultimaHoraEnvio => TrackingService.UltimaHoraEnvio;
+    private double? ultimaPrecisionMetros => TrackingService.UltimaPrecisionMetros;
+
     private string ultimaHoraEnvioTexto => ultimaHoraEnvio?.ToString("g") ?? "Sin envíos todavía";
+
+    private string precisionGpsTexto =>
+        ultimaPrecisionMetros.HasValue
+            ? $"{ultimaPrecisionMetros.Value:0} m"
+            : "Esperando lectura GPS";
 
     protected override void OnInitialized()
     {

@@ -8,6 +8,8 @@ namespace NazarenoSonsonate.Mobile.Services
     {
         private readonly HttpClient _httpClient;
 
+        private const double PrecisionMaximaAceptableMetros = 25.0;
+
         public UbicacionService(HttpClient httpClient)
         {
             _httpClient = httpClient;
@@ -34,7 +36,8 @@ namespace NazarenoSonsonate.Mobile.Services
                 FechaHora = DateTime.UtcNow,
                 GrupoActual = grupoActual ?? "",
                 Mensaje = mensaje ?? "Ubicación enviada desde dispositivo autorizado",
-                TipoUnidad = tipoUnidad
+                TipoUnidad = tipoUnidad,
+                PrecisionMetros = location.Accuracy
             };
 
             try
@@ -63,6 +66,12 @@ namespace NazarenoSonsonate.Mobile.Services
                 return false;
 
             if (location.Longitude < -180 || location.Longitude > 180)
+                return false;
+
+            if (!location.Accuracy.HasValue)
+                return false;
+
+            if (location.Accuracy.Value > PrecisionMaximaAceptableMetros)
                 return false;
 
             return true;
