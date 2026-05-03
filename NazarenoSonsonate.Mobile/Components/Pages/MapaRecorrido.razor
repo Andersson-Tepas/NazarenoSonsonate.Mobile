@@ -1184,7 +1184,7 @@
         if (!mapaGoogleDisponible)
             return;
 
-        await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
+        await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
 
         _ = ObtenerPuntosPorTipoLocal("cargador");
 
@@ -1203,7 +1203,7 @@
         if (!mapaGoogleDisponible)
             return;
 
-        await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
+        await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
 
         _ = ObtenerPuntosPorTipoLocal("cargadora");
 
@@ -1222,7 +1222,7 @@
         if (!mapaGoogleDisponible)
             return;
 
-        await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
+        await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
 
         if (string.IsNullOrWhiteSpace(tipoSelectorGrupo))
             return;
@@ -1427,7 +1427,7 @@
             if (!mapaGoogleDisponible)
                 return;
 
-            await JS.InvokeVoidAsync("mapaRecorrido.ocultarAndasTiempoReal");
+            await JS.InvokeVoidAsync("mapaRecorrido.mostrarAndasTiempoReal");
 
             var permiso = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
 
