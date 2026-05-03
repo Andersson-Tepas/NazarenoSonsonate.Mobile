@@ -27,6 +27,10 @@
     autoCentrarProcesion: true,
 
     andaInfoActivaStorageKey: "nazareno_anda_info_activa",
+    globoAndaOverlay: null,
+    globoAndaTipoUnidad: null,
+
+    globoPuntoOverlay: null,
 
     esperarGoogleMaps: async function () {
         let intentos = 0;
@@ -63,8 +67,8 @@
         this.dataLayer = new google.maps.Data({ map: this.map });
         this.marcadoresTiempoReal = {};
         this.marcadorUsuario = null;
-        this.infoTiempoReal = new google.maps.InfoWindow();
-        this.infoPuntos = new google.maps.InfoWindow();
+        this.infoTiempoReal = null;
+        this.infoPuntos = null;
 
         this.puntoMarkers = [];
         this.todosLosPuntos = [];
@@ -85,18 +89,16 @@
         this.ubicacionesTiempoReal = {};
         this.animacionesTiempoReal = {};
         this.autoCentrarProcesion = true;
+
+        this.cerrarGloboAnda(false);
+        this.cerrarGloboPunto();
     },
 
     dispose: function (limpiarElemento = true) {
         this.renderVersion++;
 
-        if (this.infoPuntos) {
-            this.infoPuntos.close();
-        }
-
-        if (this.infoTiempoReal) {
-            this.infoTiempoReal.close();
-        }
+        this.cerrarGloboAnda(false);
+        this.cerrarGloboPunto();
 
         if (Array.isArray(this.puntosIndexados)) {
             for (let i = 0; i < this.puntosIndexados.length; i++) {
@@ -327,24 +329,164 @@
         }
     },
 
-    abrirInfoAnda: function (tipoUnidad, marker) {
+    crearGloboOverlay: function (marker, contenidoHtml, anchoMaximo = "220px") {
+        const overlay = new google.maps.OverlayView();
+
+        overlay._marker = marker;
+        overlay._contenidoHtml = contenidoHtml;
+        overlay._div = null;
+
+        overlay.onAdd = function () {
+            const contenedor = document.createElement("div");
+            contenedor.style.position = "absolute";
+            contenedor.style.transform = "translate(-50%, -100%)";
+            contenedor.style.marginTop = "-12px";
+            contenedor.style.pointerEvents = "auto";
+            contenedor.style.zIndex = "9999";
+
+            const caja = document.createElement("div");
+            caja.innerHTML = contenidoHtml;
+            caja.style.background = "#ffffff";
+            caja.style.color = "#111111";
+            caja.style.border = "1px solid #8a8a8a";
+            caja.style.borderRadius = "0px";
+            caja.style.padding = "5px 10px";
+            caja.style.fontSize = "14px";
+            caja.style.fontWeight = "400";
+            caja.style.lineHeight = "19px";
+            caja.style.whiteSpace = "nowrap";
+            caja.style.maxWidth = anchoMaximo;
+            caja.style.boxShadow = "0 1px 2px rgba(0,0,0,0.25)";
+            caja.style.fontFamily = "Arial, sans-serif";
+
+            const flecha = document.createElement("div");
+            flecha.style.position = "absolute";
+            flecha.style.left = "50%";
+            flecha.style.bottom = "-6px";
+            flecha.style.width = "10px";
+            flecha.style.height = "10px";
+            flecha.style.background = "#ffffff";
+            flecha.style.borderRight = "1px solid #8a8a8a";
+            flecha.style.borderBottom = "1px solid #8a8a8a";
+            flecha.style.transform = "translateX(-50%) rotate(45deg)";
+            flecha.style.boxShadow = "1px 1px 1px rgba(0,0,0,0.10)";
+
+            contenedor.appendChild(caja);
+            contenedor.appendChild(flecha);
+
+            this._div = contenedor;
+
+            const panes = this.getPanes();
+            panes.floatPane.appendChild(contenedor);
+        };
+
+        overlay.draw = function () {
+            if (!this._div || !this._marker) return;
+
+            const projection = this.getProjection();
+            if (!projection) return;
+
+            const position = this._marker.getPosition();
+            if (!position) return;
+
+            const point = projection.fromLatLngToDivPixel(position);
+            if (!point) return;
+
+            this._div.style.left = point.x + "px";
+            this._div.style.top = point.y + "px";
+        };
+
+        overlay.onRemove = function () {
+            if (this._div && this._div.parentNode) {
+                this._div.parentNode.removeChild(this._div);
+            }
+
+            this._div = null;
+        };
+
+        overlay.setMap(this.map);
+        return overlay;
+    },
+
+    cerrarGloboAnda: function (limpiarPersistencia = false) {
+        if (this.globoAndaOverlay) {
+            try {
+                this.globoAndaOverlay.setMap(null);
+            } catch {
+            }
+        }
+
+        this.globoAndaOverlay = null;
+        this.globoAndaTipoUnidad = null;
+
+        if (limpiarPersistencia) {
+            try {
+                localStorage.removeItem(this.andaInfoActivaStorageKey);
+            } catch {
+            }
+        }
+    },
+
+    cerrarGloboPunto: function () {
+        if (this.globoPuntoOverlay) {
+            try {
+                this.globoPuntoOverlay.setMap(null);
+            } catch {
+            }
+        }
+
+        this.globoPuntoOverlay = null;
+    },
+
+    abrirGloboAnda: function (tipoUnidad, marker) {
         if (!this.map || !marker || !tipoUnidad) return;
 
+        this.cerrarGloboPunto();
+        this.cerrarGloboAnda(false);
+
         const titulo = this.obtenerTituloUnidad(tipoUnidad);
+        const contenido = `<strong style="font-size:15px;font-weight:700;">${titulo}</strong>`;
 
-        this.infoTiempoReal.setContent(`
-            <strong style="font-size:14px; white-space:nowrap;">${titulo}</strong>
-        `);
+        this.globoAndaOverlay = this.crearGloboOverlay(marker, contenido, "180px");
+        this.globoAndaTipoUnidad = tipoUnidad;
+    },
 
-        this.infoTiempoReal.open(this.map, marker);
+    abrirGloboPunto: function (marker, grupo, tipo, referencia) {
+        if (!this.map || !marker) return;
+
+        this.cerrarGloboAnda(false);
+        this.cerrarGloboPunto();
+
+        const tipoTexto = tipo === "cargadora"
+            ? "Cargadora"
+            : tipo === "cargador"
+                ? "Cargador"
+                : "Grupo";
+
+        const referenciaTexto = referencia && referencia.toString().trim() !== ""
+            ? referencia.toString().trim()
+            : "Sin referencia";
+
+        const contenido = `
+            <div style="font-size:14px; line-height:19px;">
+                <strong style="font-size:15px;">Grupo: ${grupo || "Sin definir"}</strong><br/>
+                <span>Tipo: ${tipoTexto}</span><br/>
+                <span>Referencia: ${referenciaTexto}</span>
+            </div>
+        `;
+
+        this.globoPuntoOverlay = this.crearGloboOverlay(marker, contenido, "240px");
+    },
+
+    actualizarGloboAnda: function () {
+        if (this.globoAndaOverlay && typeof this.globoAndaOverlay.draw === "function") {
+            this.globoAndaOverlay.draw();
+        }
     },
 
     limpiarPuntosRuta: function () {
         this.renderVersion++;
-
-        if (this.infoPuntos) {
-            this.infoPuntos.close();
-        }
+        this.cerrarGloboPunto();
 
         for (let i = 0; i < this.puntosIndexados.length; i++) {
             const punto = this.puntosIndexados[i];
@@ -432,16 +574,7 @@
         });
 
         marker.addListener("click", () => {
-            const contenido = `
-                <div style="min-width:150px">
-                    <strong>Grupo: ${grupo || "Sin definir"}</strong>
-                    ${tipo ? `<br/>Tipo: ${tipo === "cargadora" ? "Cargadora" : "Cargador"}` : ""}
-                    ${referencia ? `<br/>Referencia: ${referencia}` : ""}
-                </div>
-            `;
-
-            this.infoPuntos.setContent(contenido);
-            this.infoPuntos.open(this.map, marker);
+            this.abrirGloboPunto(marker, grupo, tipo, referencia);
         });
 
         punto._marker = marker;
@@ -482,9 +615,7 @@
 
         const nuevasKeys = new Set(puntosVisibles.map(p => p._markerKey));
 
-        if (this.infoPuntos) {
-            this.infoPuntos.close();
-        }
+        this.cerrarGloboPunto();
 
         for (let i = 0; i < this.puntosIndexados.length; i++) {
             const punto = this.puntosIndexados[i];
@@ -542,6 +673,7 @@
         this.filtroActual = "ninguno";
         this.grupoSeleccionado = null;
         this.tipoSeleccionado = null;
+        this.cerrarGloboPunto();
         await this.redibujarPuntosFiltrados();
         return true;
     },
@@ -558,6 +690,7 @@
         }
 
         this.grupoSeleccionado = null;
+        this.cerrarGloboPunto();
         await this.redibujarPuntosFiltrados();
         return true;
     },
@@ -593,6 +726,7 @@
         this.tipoSeleccionado = this.normalizarTexto(tipo);
         this.grupoSeleccionado = grupo.toString().trim();
 
+        this.cerrarGloboPunto();
         await this.redibujarPuntosFiltrados();
         return true;
     },
@@ -668,7 +802,7 @@
 
             marker.addListener("click", () => {
                 this.guardarAndaInfoActiva(tipoUnidad);
-                this.abrirInfoAnda(tipoUnidad, marker);
+                this.abrirGloboAnda(tipoUnidad, marker);
             });
 
             this.marcadoresTiempoReal[tipoUnidad] = marker;
@@ -682,8 +816,8 @@
 
         if (andaInfoActiva === tipoUnidad) {
             setTimeout(() => {
-                this.abrirInfoAnda(tipoUnidad, marker);
-            }, 250);
+                this.abrirGloboAnda(tipoUnidad, marker);
+            }, 150);
         }
 
         if (centrar && this.autoCentrarProcesion) {
@@ -721,6 +855,10 @@
 
             marker.setPosition(position);
 
+            if (this.globoAndaTipoUnidad === tipoUnidad) {
+                this.actualizarGloboAnda();
+            }
+
             if (centrarDuranteAnimacion) {
                 this.map.panTo(position);
             }
@@ -731,6 +869,10 @@
                 };
             } else {
                 marker.setPosition({ lat: toLat, lng: toLng });
+
+                if (this.globoAndaTipoUnidad === tipoUnidad) {
+                    this.actualizarGloboAnda();
+                }
 
                 if (centrarDuranteAnimacion) {
                     this.map.panTo({ lat: toLat, lng: toLng });
@@ -745,8 +887,15 @@
         };
     },
 
+    actualizarGloboAnda: function () {
+        if (this.globoAndaOverlay && typeof this.globoAndaOverlay.draw === "function") {
+            this.globoAndaOverlay.draw();
+        }
+    },
+
     ocultarAndasTiempoReal: function () {
         this.andasVisibles = false;
+        this.cerrarGloboAnda(false);
 
         Object.values(this.marcadoresTiempoReal).forEach(marker => {
             if (marker) {
